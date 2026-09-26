@@ -1,7 +1,7 @@
 {
   "domain": "kma_weather",
   "name": "기상청 스마트 날씨",
-  "version": "2.1.8",
+  "version": "2.1.9",
   "documentation": "https://github.com/Murianwind/kma_weather",
   "issue_tracker": "https://github.com/Murianwind/kma_weather/issues",
   "dependencies": [],

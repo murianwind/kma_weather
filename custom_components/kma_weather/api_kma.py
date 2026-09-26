@@ -35,6 +35,19 @@ from .const import (
 _POLLEN_KINDS: tuple[str, ...] = tuple(_POLLEN_SEASONS.keys())
 _POLLEN_GRADE_RANK = {"좋음": 1, "보통": 2, "나쁨": 3, "매우나쁨": 4}
 
+# ── _fetch 재시도 정책 ───────────────────────────────────────────────────
+_FETCH_MAX_ATTEMPTS = 2                                 # 최초 1회 + 재시도 1회
+_RETRYABLE_HTTP_STATUS = (429, 500, 502, 503, 504)
+
+# 에어코리아(B552584)는 data.go.kr 게이트웨이 뒤 백엔드가 느려 15초를 넘기는
+# 경우가 잦다(실사용 로그: 매시 15분 주기 TimeoutError). 한 시간에 한 번
+# 도는 작업이라 넉넉하게 기다린다.
+_AIRKOREA_API_TIMEOUT = 30
+_AIRKOREA_NEARBY_URL = "https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList"
+_AIRKOREA_AIR_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty"
+# 이 거리(km) 이상 이동하면 측정소 캐시(이름·코드)를 새로 구한다
+_STATION_CACHE_RADIUS_KM = 2.0
+
 # ── 특보 기본명(호우/폭염 등) → warnVar 역매핑 ─────────────────────────────
 # weather.go.kr 실시간 페이지의 "특보" 칸(예: "호우")을 warnVar 키로 되돌리는 데 사용
 _BASE_NAME_TO_WARNVAR: dict[str, str] = {}
@@ -329,22 +342,73 @@ class KMAWeatherAPI:
         "LivingWthrIdxServiceV5":    "자외선지수",
     }
 
-    async def _fetch(self, url, params, headers=None, timeout=15, retry_log_level=logging.WARNING):
-        if self.hass is not None:
-            for fragment, key in self._CALL_COUNT_KEY.items():
-                if fragment in url:
-                    if hasattr(self, "_call_counter_ref") and self._call_counter_ref is not None:
-                        self._call_counter_ref(key)
-                    break
+    def _count_api_call(self, url: str) -> None:
+        """호출 카운터 센서용: URL에 해당하는 서비스 카운터를 1 올린다."""
+        if self.hass is None:
+            return
+        for fragment, key in self._CALL_COUNT_KEY.items():
+            if fragment in url:
+                if getattr(self, "_call_counter_ref", None) is not None:
+                    self._call_counter_ref(key)
+                return
 
-        for attempt in range(2):
+    @staticmethod
+    def _is_retryable_error(err: BaseException) -> bool:
+        """
+        일시적인 네트워크 문제인지 예외 타입으로 판단한다.
+
+        TimeoutError는 메시지가 빈 문자열이라, 예전처럼 메시지에 "500" 같은
+        숫자가 있는지로 판단하면 재시도 대상에서 빠진다. 그래서 타입으로 본다.
+        """
+        if isinstance(err, aiohttp.ClientResponseError):
+            return err.status in _RETRYABLE_HTTP_STATUS
+        return isinstance(err, (asyncio.TimeoutError, aiohttp.ClientConnectionError))
+
+    def _describe_error(self, err: BaseException) -> str:
+        """로그용 예외 설명: 타입명 + (있으면) 메시지. 메시지 없는 TimeoutError도 원인이 보이게 한다."""
+        msg = self._mask_key(err).strip()
+        return f"{type(err).__name__}: {msg}" if msg else type(err).__name__
+
+    async def _read_json_body(self, url: str, response) -> dict | None:
+        """정상 상태(200 등) 응답 본문을 JSON 객체로 읽는다. 형식이 틀리면 None."""
+        response.raise_for_status()
+        text = await response.text()
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            _LOGGER.error("API 응답 파싱 실패 (%s): 알 수 없는 형식", self._mask_key(url))
+            return None
+        if not isinstance(parsed, dict):
+            _LOGGER.error(
+                "API 응답이 JSON 객체가 아닙니다 (%s): %s 수신 → 무시",
+                self._mask_key(url), type(parsed).__name__,
+            )
+            return None
+        return parsed
+
+    async def _fetch(
+        self, url, params, headers=None, timeout=15,
+        retry_log_level=logging.WARNING, fail_log_level=logging.ERROR,
+    ):
+        """
+        GET 요청 후 JSON 객체를 반환한다. 일시적 오류는 1회 재시도한다.
+
+        retry_log_level: HTTP 429/5xx 재시도 관련 로그 레벨
+        fail_log_level:  예외(타임아웃·연결 오류 등)로 최종 실패했을 때의 로그 레벨.
+                         실패해도 다른 수단으로 보완하는 호출자는 DEBUG로 낮추고,
+                         보완까지 실패했을 때 호출자가 직접 경고를 남긴다.
+        """
+        self._count_api_call(url)
+
+        for attempt in range(1, _FETCH_MAX_ATTEMPTS + 1):
+            is_last = attempt == _FETCH_MAX_ATTEMPTS
             try:
                 async with self.session.get(
                     url, params=params, headers=headers, timeout=timeout
                 ) as response:
-                    if response.status in (429, 500, 502, 503, 504):
+                    if response.status in _RETRYABLE_HTTP_STATUS:
                         _desc = "요청 한도 초과" if response.status == 429 else "일시적 서버 오류"
-                        if attempt == 0:
+                        if not is_last:
                             _LOGGER.log(retry_log_level, "API HTTP %s 발생 (%s). 10초 후 재시도합니다. (%s)", response.status, _desc, self._mask_key(url))
                             await asyncio.sleep(10.0)
                             continue
@@ -362,25 +426,18 @@ class KMAWeatherAPI:
                         _LOGGER.debug("API 404 응답 (%s) - 미신청 또는 중지된 서비스", self._mask_key(url))
                         return {"_http_error": "404"}
 
-                    response.raise_for_status()
-                    text = await response.text()
-                    try:
-                        parsed = json.loads(text)
-                    except (json.JSONDecodeError, ValueError):
-                        _LOGGER.error("API 응답 파싱 실패 (%s): 알 수 없는 형식", self._mask_key(url))
-                        return None
-                    if not isinstance(parsed, dict):
-                        _LOGGER.error(
-                            "API 응답이 JSON 객체가 아닙니다 (%s): %s 수신 → 무시",
-                            self._mask_key(url), type(parsed).__name__,
-                        )
-                        return None
-                    return parsed
+                    return await self._read_json_body(url, response)
             except Exception as err:
-                is_retryable = any(code in str(err) for code in ("429", "500", "502", "503", "504"))
-                if attempt == 1 or not is_retryable:
-                    _LOGGER.error("API 호출 실패 (%s): %s", self._mask_key(url), self._mask_key(err))
-                    break
+                if is_last or not self._is_retryable_error(err):
+                    _LOGGER.log(
+                        fail_log_level, "API 호출 실패 (%s): %s (%d회 시도)",
+                        self._mask_key(url), self._describe_error(err), attempt,
+                    )
+                    return None
+                _LOGGER.debug(
+                    "API 호출 일시 오류 (%s): %s → 3초 후 재시도합니다.",
+                    self._mask_key(url), self._describe_error(err),
+                )
                 await asyncio.sleep(3.0)
         return None
 
@@ -416,9 +473,6 @@ class KMAWeatherAPI:
         self.lat, self.lon, self.nx, self.ny = lat, lon, nx, ny
         now = datetime.now(self.tz)
 
-        async def _skip_coro(default):
-            return default
-
         def _should_call(key: str) -> bool:
             return key in self._approved_apis or key in self._pending_apis
 
@@ -438,8 +492,7 @@ class KMAWeatherAPI:
                 air_data = {}
 
             address = await self._get_address(lat, lon)
-            await asyncio.sleep(1.2)
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(2.7)
 
             if _should_call("warning"):
                 warning = await self._get_warning(warn_area_code)
@@ -485,120 +538,196 @@ class KMAWeatherAPI:
                     a.get("suburb", a.get("village", "")),
                 ]
                 return " ".join([p for p in parts if p]).strip()
-        except:
-            pass
+        except Exception as e:
+            _LOGGER.debug("주소 역지오코딩 실패 (좌표로 대체): %s", self._mask_key(e))
         return f"{lat:.4f}, {lon:.4f}"
 
     async def _get_air_quality(self, lat: float, lon: float) -> dict:
+        """
+        에어코리아 대기질(PM10/PM2.5/오존)을 구한다.
+
+        흐름:
+          1. 2km 이상 이동했으면 측정소 캐시(이름·코드)를 비운다.
+          2. 측정소 이름(공식 API)과 측정소코드(airkorea.or.kr)를 각각 확보한다.
+             둘은 서로 독립적이라, 이름 조회가 실패해도 코드는 구할 수 있다.
+          3. 이름이 있으면 대기질 API를 조회한다.
+          4. API 값이 없으면(이름 조회 실패 포함) 코드로 페이지 보완을 시도한다.
+          5. 모든 수단이 실패했을 때만 경고를 한 번 남긴다.
+        """
+        sn = None
         try:
-            if (self._cached_station
-                    and self._cached_station_lat is not None
-                    and _haversine_fn(
-                        self._cached_station_lat, self._cached_station_lon, lat, lon
-                    ) > 2.0):
-                _LOGGER.debug(
-                    "위치 이동 감지 → 에어코리아 측정소 캐시 무효화 (%s → 재계산)",
-                    self._cached_station,
+            self._invalidate_station_cache_if_moved(lat, lon)
+
+            sn, unsubscribed = await self._ensure_station_name(lat, lon)
+            if unsubscribed:
+                return {}
+            await self._ensure_station_code(lat, lon)
+
+            if sn:
+                air_items, unsubscribed = await self._fetch_air_items(sn)
+                if unsubscribed:
+                    return {"station": sn}
+                if air_items:
+                    self._mark_approved("air")
+                    return self._air_result_from_api(air_items[0], sn)
+
+            page_result = await self._try_page_air_quality()
+            if page_result:
+                _LOGGER.info(
+                    "대기질 보완: API로 값을 받지 못해 에어코리아 실시간 조회 페이지에서 "
+                    "측정소 '%s'의 실측값을 가져와 채웁니다.",
+                    sn or self._cached_station_code,
                 )
-                self._cached_station = None
-                self._cached_station_code = None
-                self._cached_station_lat = None
-                self._cached_station_lon = None
+                return self._air_result_from_page(page_result, sn)
 
-            sn = self._cached_station
-            if not sn:
-                tm_x, tm_y = self._wgs84_to_tm(lat, lon)
-                st_json = await self._fetch(
-                    "https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList",
-                    {"serviceKey": self.api_key, "returnType": "json",
-                     "tmX": f"{tm_x:.2f}", "tmY": f"{tm_y:.2f}"},
-                )
-                code = self._extract_result_code(st_json)
-                if code and self._check_unsubscribed("station", code):
-                    return {}
-                items = (st_json.get("response", {}).get("body", {}).get("items", [])
-                         if st_json else [])
-                if not items:
-                    _LOGGER.warning("에어코리아 측정소 조회 실패: 조회 결과가 비어있습니다. 다음 주기에 재시도합니다.")
-                    return {}
-                sn = items[0].get("stationName")
-                self._cached_station = sn
-                self._cached_station_lat = lat
-                self._cached_station_lon = lon
-                _LOGGER.info("에어코리아 측정소 확인: '%s'", sn)
-
-            if not self._cached_station_code:
-                # 공식 API(getNearbyMsrstnList)는 측정소코드를 안 주므로(실측
-                # 확인됨), 대기질 페이지 보완(오존 포함)에만 쓰는 코드를
-                # airkorea.or.kr 웹페이지에서 별도로 구한다. 실패해도 원래
-                # API(이름 기준) 조회는 전혀 영향받지 않고, 다음 폴링 때
-                # 가볍게 다시 시도된다.
-                city_name = (await self._get_address(lat, lon)).split()[0] if lat and lon else ""
-                self._cached_station_code = await self._discover_airkorea_station_code(lat, lon, city_name)
-
-            air_json = await self._fetch(
-                "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty",
-                {"serviceKey": self.api_key, "returnType": "json",
-                 "stationName": sn, "dataTerm": "daily", "ver": "1.5"},
-                # 대기질은 실패해도 에어코리아 페이지로 보완할 수 있으므로,
-                # 재시도 단계의 5xx 로그는 굳이 경고로 남기지 않는다(debug).
-                # 진짜 경고는 보완까지 실패했을 때만 아래에서 남긴다.
-                retry_log_level=logging.DEBUG,
+            _LOGGER.warning(
+                "대기질 조회 실패: API와 에어코리아 실시간 조회(보완) 둘 다 "
+                "값을 가져오지 못했습니다 (측정소 '%s'). 다음 주기에 재시도합니다.",
+                sn or "확인 실패",
             )
-            code = self._extract_result_code(air_json)
-            if code and self._check_unsubscribed("air", code):
-                return {"station": sn}
-
-            ai_list = (air_json.get("response", {}).get("body", {}).get("items", [])
-                       if air_json else [])
-            if not ai_list:
-                page_result = {}
-                try:
-                    page_result = await self._fetch_page_air_quality(self._cached_station_code)
-                except Exception as e:
-                    _LOGGER.debug("대기질 페이지 보완 확인 실패 (무시): %s", self._mask_key(e))
-                if page_result:
-                    _LOGGER.info(
-                        "대기질 보완: API 응답이 비어있어 에어코리아 실시간 조회 페이지에서 "
-                        "측정소 '%s'의 실측값을 가져와 채웁니다.", sn,
-                    )
-                    p10v = page_result.get("pm10Value")
-                    p25v = page_result.get("pm25Value")
-                    o3v = page_result.get("o3Value")
-                    return {
-                        "pm10Value": p10v,
-                        "pm10Grade": self._get_air_grade(p10v, "pm10") if p10v else None,
-                        "pm25Value": p25v,
-                        "pm25Grade": self._get_air_grade(p25v, "pm25") if p25v else None,
-                        "o3Value": o3v,
-                        "o3Grade": self._get_air_grade(o3v, "o3") if o3v else None,
-                        "station": sn,
-                    }
-                # API도, 보완용 실시간 조회도 둘 다 실패했을 때만 실제로 경고한다.
-                _LOGGER.warning(
-                    "대기질 조회 실패: API와 에어코리아 실시간 조회(보완) 둘 다 "
-                    "값을 가져오지 못했습니다 (측정소 '%s'). 다음 주기에 재시도합니다.", sn,
-                )
-                return {"station": sn}
-
-            ai = ai_list[0]
-            self._mark_approved("air")
-            p10v = ai.get("pm10Value")
-            p25v = ai.get("pm25Value")
-            o3v = ai.get("o3Value")
-
-            return {
-                "pm10Value": p10v,
-                "pm10Grade": self._get_air_grade(p10v, "pm10"),
-                "pm25Value": p25v,
-                "pm25Grade": self._get_air_grade(p25v, "pm25"),
-                "o3Value": o3v,
-                "o3Grade": self._get_air_grade(o3v, "o3"),
-                "station": sn,
-            }
+            return {"station": sn} if sn else {}
         except Exception as e:
             _LOGGER.error("에어코리아 데이터 호출 실패: %s", self._mask_key(e))
             return {"station": sn} if sn else {}
+
+    def _invalidate_station_cache_if_moved(self, lat: float, lon: float) -> None:
+        """
+        캐시된 측정소 위치에서 일정 거리 이상 이동했으면 이름·코드 캐시를 비운다.
+
+        이름 조회는 실패하고 코드만 확보된 상태도 있으므로, 이름 유무가 아니라
+        캐시 좌표 유무로 판단한다.
+        """
+        if self._cached_station_lat is None or self._cached_station_lon is None:
+            return
+        if _haversine_fn(
+            self._cached_station_lat, self._cached_station_lon, lat, lon
+        ) <= _STATION_CACHE_RADIUS_KM:
+            return
+        _LOGGER.debug(
+            "위치 이동 감지 → 에어코리아 측정소 캐시 무효화 (%s → 재계산)",
+            self._cached_station or self._cached_station_code,
+        )
+        self._cached_station = None
+        self._cached_station_code = None
+        self._cached_station_lat = None
+        self._cached_station_lon = None
+
+    def _remember_station_location(self, lat: float, lon: float) -> None:
+        self._cached_station_lat = lat
+        self._cached_station_lon = lon
+
+    async def _ensure_station_name(self, lat: float, lon: float) -> tuple[str | None, bool]:
+        """
+        가장 가까운 측정소 이름을 구한다(캐시 우선).
+        반환: (측정소 이름 또는 None, 미신청 여부)
+        """
+        if self._cached_station:
+            return self._cached_station, False
+
+        tm_x, tm_y = self._wgs84_to_tm(lat, lon)
+        st_json = await self._fetch(
+            _AIRKOREA_NEARBY_URL,
+            {"serviceKey": self.api_key, "returnType": "json",
+             "tmX": f"{tm_x:.2f}", "tmY": f"{tm_y:.2f}"},
+            timeout=_AIRKOREA_API_TIMEOUT,
+            # 실패해도 측정소코드 기준 페이지 보완이 있으므로 조용히 넘기고,
+            # 보완까지 실패했을 때 _get_air_quality가 경고를 한 번 남긴다.
+            retry_log_level=logging.DEBUG,
+            fail_log_level=logging.DEBUG,
+        )
+        code = self._extract_result_code(st_json)
+        if code and self._check_unsubscribed("station", code):
+            return None, True
+
+        items = (st_json.get("response", {}).get("body", {}).get("items", [])
+                 if st_json else [])
+        if not items:
+            _LOGGER.debug("에어코리아 측정소 조회 실패: 조회 결과가 비어있습니다 → 페이지 보완으로 진행")
+            return None, False
+
+        sn = items[0].get("stationName")
+        self._cached_station = sn
+        self._remember_station_location(lat, lon)
+        _LOGGER.info("에어코리아 측정소 확인: '%s'", sn)
+        return sn, False
+
+    async def _ensure_station_code(self, lat: float, lon: float) -> None:
+        """
+        페이지 보완(getRealChart)에 쓰는 측정소코드를 구한다(캐시 우선).
+
+        공식 API(getNearbyMsrstnList)는 측정소코드를 안 주므로(실측 확인됨)
+        airkorea.or.kr 웹페이지에서 좌표 기준으로 별도로 구한다. 측정소 이름과
+        무관하게 동작하며, 실패해도 다음 폴링 때 다시 시도된다.
+        """
+        if self._cached_station_code:
+            return
+        # 역지오코딩 결과에 시/구/동이 하나도 없으면 빈 문자열이 오므로 안전하게 꺼낸다
+        address_parts = (await self._get_address(lat, lon)).split() if lat and lon else []
+        city_name = address_parts[0] if address_parts else ""
+        self._cached_station_code = await self._discover_airkorea_station_code(lat, lon, city_name)
+        if self._cached_station_code:
+            self._remember_station_location(lat, lon)
+
+    async def _fetch_air_items(self, station_name: str) -> tuple[list, bool]:
+        """
+        측정소 이름으로 대기질 API를 조회한다.
+        반환: (측정값 목록, 미신청 여부)
+        """
+        air_json = await self._fetch(
+            _AIRKOREA_AIR_URL,
+            {"serviceKey": self.api_key, "returnType": "json",
+             "stationName": station_name, "dataTerm": "daily", "ver": "1.5"},
+            timeout=_AIRKOREA_API_TIMEOUT,
+            # 대기질은 실패해도 에어코리아 페이지로 보완할 수 있으므로 재시도·
+            # 최종 실패 로그는 debug로 남긴다. 진짜 경고는 보완까지 실패했을
+            # 때만 _get_air_quality에서 남긴다.
+            retry_log_level=logging.DEBUG,
+            fail_log_level=logging.DEBUG,
+        )
+        code = self._extract_result_code(air_json)
+        if code and self._check_unsubscribed("air", code):
+            return [], True
+        items = (air_json.get("response", {}).get("body", {}).get("items", [])
+                 if air_json else [])
+        return items, False
+
+    async def _try_page_air_quality(self) -> dict:
+        """페이지 보완을 시도한다. 예외는 삼키고 빈 dict를 돌려준다."""
+        try:
+            return await self._fetch_page_air_quality(self._cached_station_code)
+        except Exception as e:
+            _LOGGER.debug("대기질 페이지 보완 확인 실패 (무시): %s", self._mask_key(e))
+            return {}
+
+    def _air_result_from_api(self, item: dict, station_name: str) -> dict:
+        p10v = item.get("pm10Value")
+        p25v = item.get("pm25Value")
+        o3v = item.get("o3Value")
+        return {
+            "pm10Value": p10v,
+            "pm10Grade": self._get_air_grade(p10v, "pm10"),
+            "pm25Value": p25v,
+            "pm25Grade": self._get_air_grade(p25v, "pm25"),
+            "o3Value": o3v,
+            "o3Grade": self._get_air_grade(o3v, "o3"),
+            "station": station_name,
+        }
+
+    def _air_result_from_page(self, page_result: dict, station_name: str | None) -> dict:
+        p10v = page_result.get("pm10Value")
+        p25v = page_result.get("pm25Value")
+        o3v = page_result.get("o3Value")
+        result = {
+            "pm10Value": p10v,
+            "pm10Grade": self._get_air_grade(p10v, "pm10") if p10v else None,
+            "pm25Value": p25v,
+            "pm25Grade": self._get_air_grade(p25v, "pm25") if p25v else None,
+            "o3Value": o3v,
+            "o3Grade": self._get_air_grade(o3v, "o3") if o3v else None,
+        }
+        if station_name:
+            result["station"] = station_name
+        return result
 
     def _get_air_grade(self, val: object, p_type: str) -> str:
         v = _safe_float(val)
@@ -1186,9 +1315,6 @@ class KMAWeatherAPI:
                 return "좋음"
 
             c = self._pollen_cache[kind]
-            ann_today = _ann(today_str, 6)
-            ann_18    = _ann(today_str, 18)
-            ann_prev  = _ann(prev_str, 18)
 
             if h < 7:
                 if c["tomorrow"] is None:

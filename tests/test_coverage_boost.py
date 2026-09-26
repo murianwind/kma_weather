@@ -146,7 +146,7 @@ async def test_air_quality_cache_hit():
         }
     }
 
-    async def mock_fetch(url, params=None, timeout=10, retry_log_level=None):
+    async def mock_fetch(url, params=None, **kwargs):
         assert "MsrstnInfoInqireSvc" not in url, "캐시 HIT인데 측정소 재조회 발생"
         return air_json
 
@@ -160,7 +160,7 @@ async def test_air_quality_no_station_items():
     api = KMAWeatherAPI(MagicMock(), "key")
     api.lat, api.lon = 37.56, 126.98
 
-    async def mock_fetch(url, params=None, timeout=10, retry_log_level=None):
+    async def mock_fetch(url, params=None, **kwargs):
         if "MsrstnInfoInqireSvc" in url:
             return {"response": {"body": {"items": []}}}
         return {}
@@ -174,7 +174,7 @@ async def test_air_quality_no_air_data_items():
     api = KMAWeatherAPI(MagicMock(), "key")
     api.lat, api.lon = 37.56, 126.98
 
-    async def mock_fetch(url, params=None, timeout=10, retry_log_level=None):
+    async def mock_fetch(url, params=None, **kwargs):
         if "MsrstnInfoInqireSvc" in url:
             return {"response": {"body": {"items": [{"stationName": "중구"}]}}}
         return {"response": {"body": {"items": []}}}
@@ -194,7 +194,7 @@ async def test_air_quality_station_lookup_ignores_missing_station_code_field():
     """
     api = KMAWeatherAPI(MagicMock(), "key")
 
-    async def mock_fetch(url, params=None, timeout=10, retry_log_level=None):
+    async def mock_fetch(url, params=None, **kwargs):
         if "getNearbyMsrstnList" in url:
             return {"response": {"header": {"resultCode": "00"}, "body": {"items": [
                 {"tm": 1.9, "addr": "서울 노원구 화랑로 429", "stationName": "화랑로"},
@@ -390,7 +390,7 @@ async def test_air_quality_fetch_returns_none():
     api = KMAWeatherAPI(MagicMock(), "key")
     api.lat, api.lon = 37.56, 126.98
 
-    async def mock_fetch(url, params=None, timeout=10, retry_log_level=None):
+    async def mock_fetch(url, params=None, **kwargs):
         return None
 
     api._fetch = mock_fetch

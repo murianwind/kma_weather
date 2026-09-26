@@ -935,12 +935,10 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
 
         obs_reason = ", ".join(reasons) if reasons else "-"
 
-        mw_visible = False
         mw_suffix = ""
         if final_cond in ("최우수", "우수") and not sun_is_up:
             try:
                 if mw_alt_deg >= 20:
-                    mw_visible = True
                     mw_suffix = "(은하수)"
             except Exception:
                 pass
