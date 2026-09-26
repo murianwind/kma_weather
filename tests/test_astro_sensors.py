@@ -55,9 +55,6 @@ def make_coordinator(hass, entry):
     coord.api = MagicMock()
     coord.api.tz = TZ
     coord._sun_times = {}
-    coord._sun_cache_date = None
-    coord._sun_cache_lat = None
-    coord._sun_cache_lon = None
     coord._cached_data = None
     coord._sf_ts  = _TEST_SF_TS
     coord._sf_eph = _TEST_SF_EPH
@@ -114,9 +111,6 @@ class TestMoonIllumination:
         coord = MagicMock()
         coord.api.tz = TZ
         coord._sun_times = {}
-        coord._sun_cache_date = None
-        coord._sun_cache_lat = None
-        coord._sun_cache_lon = None
         coord._sf_ts  = _TEST_SF_TS
         coord._sf_eph = _TEST_SF_EPH
         coord._moon_phase_name = staticmethod(KMAWeatherUpdateCoordinator._moon_phase_name)
@@ -140,9 +134,6 @@ class TestCalcSunTimes:
         coord = MagicMock()
         coord.api.tz = TZ
         coord._sun_times = {}
-        coord._sun_cache_date = None
-        coord._sun_cache_lat = None
-        coord._sun_cache_lon = None
         coord._sf_ts  = _TEST_SF_TS
         coord._sf_eph = _TEST_SF_EPH
         coord._moon_phase_name = staticmethod(KMAWeatherUpdateCoordinator._moon_phase_name)
@@ -1141,7 +1132,6 @@ class TestEvalObservationWindAndMoon:
         coord.api.tz = TZ
         coord._sf_ts  = _TEST_SF_TS
         coord._sf_eph = _TEST_SF_EPH
-        coord._obs_min = KMAWeatherUpdateCoordinator._obs_min
         coord._OBS_ORDER = KMAWeatherUpdateCoordinator._OBS_ORDER
         weather = {
             "current_condition":     condition,
@@ -1536,7 +1526,6 @@ class TestObservationReason:
         coord.api.tz = TZ
         coord._sf_ts  = _TEST_SF_TS
         coord._sf_eph = _TEST_SF_EPH
-        coord._obs_min = KMAWeatherUpdateCoordinator._obs_min
         coord._OBS_ORDER = KMAWeatherUpdateCoordinator._OBS_ORDER
         weather = {
             "current_condition":     condition,
@@ -1614,7 +1603,6 @@ class TestObservationReason:
         coord.api.tz = TZ
         coord._sf_ts  = _TEST_SF_TS
         coord._sf_eph = _TEST_SF_EPH
-        coord._obs_min = KMAWeatherUpdateCoordinator._obs_min
         coord._OBS_ORDER = KMAWeatherUpdateCoordinator._OBS_ORDER
         return coord
 

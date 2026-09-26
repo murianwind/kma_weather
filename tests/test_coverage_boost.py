@@ -104,17 +104,6 @@ class TestTranslateMidCondition:
         api = self._api()
         assert api._translate_mid_condition_kor(wf) == expected_kor
 
-    def test_translate_mid_condition_wrapper(self):
-        api = self._api()
-        result = api._translate_mid_condition("맑음")
-        assert result == "sunny"
-
-    def test_get_condition_wrapper(self):
-        api = self._api()
-        assert api._get_condition("1", "0") == "sunny"
-        assert api._get_condition("4", "0") == "cloudy"
-        assert api._get_condition("1", "1") == "rainy"
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. _wgs84_to_tm
 # ─────────────────────────────────────────────────────────────────────────────

@@ -2007,9 +2007,6 @@ class KMAWeatherAPI:
         elif 292.5 <= v < 337.5: return "북서"
         return "북"
 
-    def _translate_mid_condition(self, wf): return self.kor_to_condition(self._translate_mid_condition_kor(wf))
-    def _get_condition(self, s, p): return self.kor_to_condition(self._get_sky_kor(s, p))
-
     def _wgs84_to_tm(self, lat, lon):
         a, f = 6378137.0, 1 / 298.257222101
         e2 = 2 * f - f ** 2

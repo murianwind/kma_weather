@@ -3,7 +3,7 @@ import logging
 import asyncio
 import pathlib
 import zlib
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone
 try:
     from skyfield.api import Loader as _SkyLoader, wgs84 as _wgs84
     from skyfield import almanac as _almanac
@@ -106,9 +106,6 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
         self._cached_reg_id_land: str | None = None
         self._cached_warn_area_code: str | None = None
 
-        self._sun_cache_date: date | None = None
-        self._sun_cache_lat: float | None = None
-        self._sun_cache_lon: float | None = None
         self._sun_times: dict = {}
 
         self._sf_eph = None
@@ -776,9 +773,6 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
             result["moonrise"] = _fmt(next_rise) if next_rise else None
             result["moonset"]  = _fmt(next_set)  if next_set  else None
 
-            self._sun_cache_date = today
-            self._sun_cache_lat  = lat
-            self._sun_cache_lon  = lon
             self._sun_times      = result
             _LOGGER.debug("천문 시각 갱신: %s (lat=%.4f, lon=%.4f)", today, lat, lon)
 
@@ -802,13 +796,6 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
         return "삭"
 
     _OBS_ORDER = ["관측불가", "불량", "보통", "우수", "최우수"]
-
-    @staticmethod
-    def _obs_min(cond_a: str, cond_b: str) -> str:
-        order = KMAWeatherUpdateCoordinator._OBS_ORDER
-        a_idx = order.index(cond_a) if cond_a in order else 0
-        b_idx = order.index(cond_b) if cond_b in order else 0
-        return order[min(a_idx, b_idx)]
 
     def _eval_observation(
         self, weather: dict, now: "datetime", lat: float, lon: float
