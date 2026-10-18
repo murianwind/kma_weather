@@ -129,42 +129,61 @@ class TestCurrentPrecipAmount:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestHourlyPrecipitationAttribute:
-    """precip_amount 센서의 속성으로 들어갈 다음 24시간 시간대별 강수량 검증"""
+    """precip_amount 센서 속성: 오늘 하루(00시~23시) 시간대별 강수량 검증.
+    HA UI가 속성 키를 이름순으로 정렬하므로 키를 오늘 00시~23시로 고정한다.
+    이미 지난 시간(현재 시각 포함)은 값이 없어 "-"로 표시한다."""
 
-    def test_contains_exactly_24_hours(self):
-        """
-        [Given] 이틀치 단기예보 데이터
-        [When]  _merge_all 호출
-        [Then]  hourly_precipitation_mm에 정확히 24개 시간대가 담김
-        """
+    @staticmethod
+    def _hourly(now, hourly_pcp=None, **kw):
         api = make_api()
-        now = datetime(2026, 7, 7, 14, 30, tzinfo=TZ)
-        short_res = make_short_res(now, {})
+        short_res = make_short_res(now, hourly_pcp or {}, **kw)
+        return api._merge_all(now, short_res, None, {})["weather"]["hourly_precipitation_mm"]
 
-        result = api._merge_all(now, short_res, None, {})
-
-        assert len(result["weather"]["hourly_precipitation_mm"]) == 24
-
-    def test_starts_from_next_hour_not_current(self):
+    def test_keys_are_today_00_to_23_in_order(self):
         """
-        [Given] 14시 30분 현재 시각
+        [Given] 이틀치 단기예보
         [When]  _merge_all 호출
-        [Then]  hourly_precipitation_mm의 첫 항목은 "15시"부터 시작 (현재 시간대는 제외)
+        [Then]  키는 항상 "00시"~"23시" 24개, 시간 순서
         """
+        hourly = self._hourly(datetime(2026, 7, 7, 14, 30, tzinfo=TZ))
+
+        assert list(hourly.keys()) == [f"{h:02d}시" for h in range(24)]
+
+    def test_past_and_current_hours_are_dash_and_future_hours_have_values(self):
+        """
+        [Given] 10시 19분(10시 15분 업데이트), 11시=2.0mm
+        [When]  _merge_all 호출
+        [Then]  00시~10시는 "-", 11시부터 예보 값
+        """
+        hourly = self._hourly(datetime(2026, 7, 7, 10, 19, tzinfo=TZ), {11: "2.0mm"})
+
+        assert all(hourly[f"{h:02d}시"] == "-" for h in range(0, 11))
+        assert hourly["11시"] == 2.0
+        assert hourly["12시"] == 0
+        assert hourly["23시"] == 0
+
+    def test_tomorrow_slots_are_not_included(self):
+        """
+        [Given] 오늘 23시=0, 내일 05시=9.0mm인 이틀치 예보 (시각 키는 오늘 것만)
+        [When]  _merge_all 호출
+        [Then]  "05시"는 오늘 예보 값(내일 값 9.0이 덮어쓰지 않음)
+        """
+        now = datetime(2026, 7, 7, 1, 0, tzinfo=TZ)
         api = make_api()
-        now = datetime(2026, 7, 7, 14, 30, tzinfo=TZ)
         short_res = make_short_res(now, {})
+        for it in short_res["response"]["body"]["items"]["item"]:
+            if it["fcstDate"] == "20260708" and it["fcstTime"] == "0500" and it["category"] == "PCP":
+                it["fcstValue"] = "9.0mm"
 
-        result = api._merge_all(now, short_res, None, {})
+        hourly = api._merge_all(now, short_res, None, {})["weather"]["hourly_precipitation_mm"]
 
-        keys = list(result["weather"]["hourly_precipitation_mm"].keys())
-        assert keys[0] == "15시"
+        assert hourly["05시"] == 0
 
     def test_window_follows_kst_clock_after_release_hour_update(self):
         """
         [Given] 05시 발표(06시부터 시작하는) 단기예보, 06:16 KST 자동 업데이트
         [When]  _merge_all 호출
-        [Then]  속성은 "07시"~다음날 "06시" 24개 (UTC 기준 "22시"로 밀리지 않음)
+        [Then]  00시~06시 "-", 07시부터 값
         """
         api = make_api()
         now = datetime(2026, 10, 19, 6, 16, tzinfo=TZ)
@@ -177,27 +196,11 @@ class TestHourlyPrecipitationAttribute:
             slot += timedelta(hours=1)
         short_res = {"response": {"body": {"items": {"item": items}}}}
 
-        result = api._merge_all(now, short_res, None, {})
+        hourly = api._merge_all(now, short_res, None, {})["weather"]["hourly_precipitation_mm"]
 
-        keys = list(result["weather"]["hourly_precipitation_mm"].keys())
-        assert keys[0] == "07시"
-        assert keys[-1] == "06시"
-        assert len(keys) == 24
-
-    def test_no_duplicate_hour_keys_across_midnight(self):
-        """
-        [Given] 다음 24시간이 자정을 넘어 다음날로 이어지는 상황
-        [When]  _merge_all 호출
-        [Then]  "00시"~"23시" 키가 중복 없이 정확히 한 번씩만 존재
-        """
-        api = make_api()
-        now = datetime(2026, 7, 7, 14, 30, tzinfo=TZ)
-        short_res = make_short_res(now, {})
-
-        result = api._merge_all(now, short_res, None, {})
-
-        keys = list(result["weather"]["hourly_precipitation_mm"].keys())
-        assert len(keys) == len(set(keys)), "시간대 키 중복 발생"
+        assert hourly["06시"] == "-"
+        assert hourly["07시"] == 0
+        assert hourly["23시"] == 0
 
     def test_hour_key_format_is_zero_padded(self):
         """
@@ -205,59 +208,36 @@ class TestHourlyPrecipitationAttribute:
         [When]  _merge_all 호출
         [Then]  시간 키는 "00시"~"09시"처럼 두 자리로 0-padding 됨
         """
-        api = make_api()
-        now = datetime(2026, 7, 7, 22, 0, tzinfo=TZ)
-        short_res = make_short_res(now, {})
+        keys = list(self._hourly(datetime(2026, 7, 7, 22, 0, tzinfo=TZ)).keys())
 
-        result = api._merge_all(now, short_res, None, {})
-
-        keys = list(result["weather"]["hourly_precipitation_mm"].keys())
         assert "00시" in keys
         assert "0시" not in keys
 
     def test_values_match_source_pcp_per_hour(self):
         """
-        [Given] 15시=1.0mm, 16시=강수없음, 17시=3.0mm로 지정한 단기예보
+        [Given] 15시=1.0mm, 16시=강수없음, 17시=3.0mm, 18시=1mm 미만으로 지정한 단기예보
         [When]  14시 정각에 _merge_all 호출
-        [Then]  hourly_precipitation_mm의 각 시각 값이 지정한 PCP와 일치
+        [Then]  각 시각 값이 PCP와 일치 ("1mm 미만"은 "~1")
         """
-        api = make_api()
-        now = datetime(2026, 7, 7, 14, 0, tzinfo=TZ)
-        short_res = make_short_res(now, {15: "1.0mm", 16: "강수없음", 17: "3.0mm"})
-
-        result = api._merge_all(now, short_res, None, {})
-        hourly = result["weather"]["hourly_precipitation_mm"]
+        hourly = self._hourly(datetime(2026, 7, 7, 14, 0, tzinfo=TZ),
+                              {15: "1.0mm", 16: "강수없음", 17: "3.0mm", 18: "1mm 미만"})
 
         assert hourly["15시"] == 1.0
-        assert hourly["16시"] == 0.0
+        assert hourly["16시"] == 0
         assert hourly["17시"] == 3.0
+        assert hourly["18시"] == "~1"
 
-    def test_updates_correctly_on_next_hourly_refresh(self):
+    def test_hour_turns_dash_on_next_hourly_refresh(self):
         """
-        [Given] 14시 30분 기준 계산 결과와 15시 30분 기준 계산 결과
+        [Given] 10시 30분과 11시 30분 기준 계산 결과
         [When]  각각 _merge_all 호출 (매시 자동 업데이트를 흉내)
-        [Then]  시간이 지나면 현재값(precip_amount)과 속성 시작 시각이
-                한 시간씩 앞으로 이동함 (업데이트가 정상적으로 반영됨)
+        [Then]  11시 값이 10시 30분에는 값, 11시 30분에는 "-"
         """
-        api = make_api()
+        before = self._hourly(datetime(2026, 7, 7, 10, 30, tzinfo=TZ), {11: "2.0mm"})
+        after = self._hourly(datetime(2026, 7, 7, 11, 30, tzinfo=TZ), {11: "2.0mm"})
 
-        now_1 = datetime(2026, 7, 7, 14, 30, tzinfo=TZ)
-        short_res_1 = make_short_res(now_1, {14: "1.0mm", 15: "2.0mm"})
-        result_1 = api._merge_all(now_1, short_res_1, None, {})
-
-        now_2 = datetime(2026, 7, 7, 15, 30, tzinfo=TZ)
-        short_res_2 = make_short_res(now_2, {14: "1.0mm", 15: "2.0mm"})
-        result_2 = api._merge_all(now_2, short_res_2, None, {})
-
-        # 1시간 경과 후 현재값이 14시→15시 값으로 갱신됨
-        assert result_1["weather"]["precip_amount"] == 1.0
-        assert result_2["weather"]["precip_amount"] == 2.0
-
-        # 속성의 시작 시각도 한 시간 앞으로 이동
-        keys_1 = list(result_1["weather"]["hourly_precipitation_mm"].keys())
-        keys_2 = list(result_2["weather"]["hourly_precipitation_mm"].keys())
-        assert keys_1[0] == "15시"
-        assert keys_2[0] == "16시"
+        assert before["11시"] == 2.0
+        assert after["11시"] == "-"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
