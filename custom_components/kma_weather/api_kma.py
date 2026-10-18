@@ -1960,6 +1960,12 @@ class KMAWeatherAPI:
             if len(hourly_precip) >= 24:
                 break
         weather_data["hourly_precipitation_mm"] = hourly_precip
+        _LOGGER.debug(
+            "시간대별 강수량 속성: now=%s 앵커=%s 구간=%s~%s (%d개)",
+            now.isoformat(), _anchor_dt.isoformat(),
+            next(iter(hourly_precip), "-"), next(reversed(hourly_precip), "-"),
+            len(hourly_precip),
+        )
 
         weather_data.update({
             "current_condition_kor": kor_now,

@@ -160,6 +160,30 @@ class TestHourlyPrecipitationAttribute:
         keys = list(result["weather"]["hourly_precipitation_mm"].keys())
         assert keys[0] == "15시"
 
+    def test_window_follows_kst_clock_after_release_hour_update(self):
+        """
+        [Given] 05시 발표(06시부터 시작하는) 단기예보, 06:16 KST 자동 업데이트
+        [When]  _merge_all 호출
+        [Then]  속성은 "07시"~다음날 "06시" 24개 (UTC 기준 "22시"로 밀리지 않음)
+        """
+        api = make_api()
+        now = datetime(2026, 10, 19, 6, 16, tzinfo=TZ)
+        items = []
+        slot = datetime(2026, 10, 19, 6, tzinfo=TZ)
+        while slot <= datetime(2026, 10, 22, 0, tzinfo=TZ):
+            for cat, val in (("TMP", "20"), ("SKY", "1"), ("PTY", "0"), ("PCP", "강수없음")):
+                items.append({"fcstDate": slot.strftime("%Y%m%d"), "fcstTime": slot.strftime("%H%M"),
+                              "category": cat, "fcstValue": val})
+            slot += timedelta(hours=1)
+        short_res = {"response": {"body": {"items": {"item": items}}}}
+
+        result = api._merge_all(now, short_res, None, {})
+
+        keys = list(result["weather"]["hourly_precipitation_mm"].keys())
+        assert keys[0] == "07시"
+        assert keys[-1] == "06시"
+        assert len(keys) == 24
+
     def test_no_duplicate_hour_keys_across_midnight(self):
         """
         [Given] 다음 24시간이 자정을 넘어 다음날로 이어지는 상황
