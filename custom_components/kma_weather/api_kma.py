@@ -1626,16 +1626,11 @@ class KMAWeatherAPI:
         tm_fc_dt = self._cache_mid_tm_fc_dt if self._cache_mid_tm_fc_dt else new_tm_fc_dt
 
         today_str, curr_h = now.strftime("%Y%m%d"), f"{now.hour:02d}00"
-        _best_slot_dt = None  # 상태값(precip_amount)이 참조한 실제 슬롯 시각 → 속성 시작점 기준
         if today_str in forecast_map:
             times = sorted(forecast_map[today_str].keys())
             best_t = next((t for t in times if t >= curr_h), times[-1] if times else None)
             if best_t:
                 weather_data.update(forecast_map[today_str][best_t])
-                _best_slot_dt = datetime(
-                    int(today_str[:4]), int(today_str[4:6]), int(today_str[6:]),
-                    int(best_t[:2]), int(best_t[2:]), tzinfo=ZoneInfo("Asia/Seoul"),
-                )
         else:
             past_dates = sorted(d for d in forecast_map if d < today_str)
             if past_dates:
@@ -1932,40 +1927,18 @@ class KMAWeatherAPI:
         # 별도 속성으로 보존한다. 상태값은 통계/자동화 호환을 위해 숫자로 유지.
         weather_data["precip_amount_display"] = str(_raw_now) if _raw_now else _no_precip_now
 
-        # ── 다음 24시간 시간대별 강수량 (현재 예상 강수량 센서의 속성용) ──────
-        # wall-clock(now) 기준이 아니라, 상태값(precip_amount)이 실제로 참조한
-        # _best_slot_dt 바로 다음 슬롯부터 이어지도록 계산한다.
-        # (그렇지 않으면 발표 직후처럼 현재 시각 슬롯이 아직 없어 다음 슬롯을
-        #  상태값으로 쓰는 상황에서, 속성이 현재 시각 기준으로 시작되어
-        #  상태값과 속성의 시작 시점이 어긋나는 문제가 생긴다.)
-        _anchor_dt = _best_slot_dt if _best_slot_dt is not None else now
-        if _anchor_dt.tzinfo is None:
-            _anchor_dt = _anchor_dt.replace(tzinfo=ZoneInfo("Asia/Seoul"))
-
-        hourly_precip: dict[str, float | str] = {}
-
-        # 현재 슬롯이 범위 값("30.0~50.0mm")이면, 상태값과 마찬가지로
-        # 현재 시각부터 속성에 포함시킨다. 범위가 아니면 기존처럼 다음 시각부터.
-        _anchor_is_range = bool(_raw_now) and "~" in str(_raw_now)
-        if _anchor_is_range:
-            hourly_precip[f"{_anchor_dt.hour:02d}시"] = _precip_display(_raw_now, _no_precip_now)
-
+        # ── 오늘 하루 시간대별 강수량 (현재 예상 강수량 센서의 속성용) ────────
+        # HA UI가 속성 키를 이름순으로 정렬하므로 키를 오늘 00시~23시로 고정한다.
+        # 이미 지난 시간(현재 시각 포함)은 예보 슬롯이 없으므로 "-"로 둔다.
+        hourly_precip: dict[str, float | str] = {f"{h:02d}시": "-" for h in range(24)}
         for entry in hourly_forecast:
             entry_dt = datetime.fromisoformat(entry["datetime"])
-            if entry_dt <= _anchor_dt:
+            if entry_dt.date() != today:
                 continue
             hourly_precip[f"{entry_dt.hour:02d}시"] = _precip_display(
                 entry.get("_raw_precip"), entry.get("_no_precip")
             )
-            if len(hourly_precip) >= 24:
-                break
         weather_data["hourly_precipitation_mm"] = hourly_precip
-        _LOGGER.debug(
-            "시간대별 강수량 속성: now=%s 앵커=%s 구간=%s~%s (%d개)",
-            now.isoformat(), _anchor_dt.isoformat(),
-            next(iter(hourly_precip), "-"), next(reversed(hourly_precip), "-"),
-            len(hourly_precip),
-        )
 
         weather_data.update({
             "current_condition_kor": kor_now,

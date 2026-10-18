@@ -486,7 +486,7 @@ class KMACustomSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
         if self._type == "observation_condition":
             return w.get("observation_attrs") or {}
 
-        # ── 현재 예상 강수량 센서: 다음 24시간 시간대별 강수량 (평탄화) ────────
+        # ── 현재 예상 강수량 센서: 오늘 하루(00시~23시) 시간대별 강수량 (평탄화) ────────
         if self._type == "precip_amount":
             hourly = w.get("hourly_precipitation_mm") or {}
             display = w.get("precip_amount_display")
