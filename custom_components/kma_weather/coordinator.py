@@ -10,6 +10,12 @@ try:
     _SKYFIELD_OK = True
 except ImportError:
     _SKYFIELD_OK = False
+from homeassistant.core import callback
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_change,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
@@ -24,6 +30,13 @@ _SF_EPH = None
 
 # ── pause_zones: 모바일 기기 도메인 ─────────────────────────────────────────
 _MOBILE_ENTITY_DOMAINS = ("device_tracker", "person")
+
+# ── pause_zones 이탈 시 갱신 ────────────────────────────────────────────────
+# 존을 벗어난 직후 오래된(존 안에서 멈춘) 데이터를 보지 않도록 한 번 갱신한다.
+_EXIT_WAIT = timedelta(minutes=5)   # 위치 흔들림 방지 대기
+_SCHEDULED_MINUTE = 15              # 정기 업데이트 시각(매시 :15)
+# pause_zones 판정을 건너뛰고 정기 업데이트와 같은 요약 갱신을 하는 이유 목록
+_SCHEDULED_REASONS = ("자동 업데이트", "존 이탈")
 
 def _is_mobile_entity(entity_id: str | None) -> bool:
     """location_entity가 device_tracker 또는 person 도메인인지 확인한다."""
@@ -97,6 +110,14 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
         self._cached_data = None
         self._unsub_timer = None
         self._update_lock = asyncio.Lock()
+
+        # pause_zones 이탈 갱신 상태
+        self._unsub_location = None           # 위치 센서 상태 변화 구독 해제
+        self._unsub_exit_wait = None          # 이탈 후 5분 대기 타이머 해제
+        self._in_pause_zone_state = False     # 마지막으로 확인한 존 안/밖
+        self._exit_detected_at: datetime | None = None
+        self._last_update_ok_at: datetime | None = None   # 마지막 API 갱신 성공 시각
+        self._scheduled_pending = False       # :15 정기 업데이트가 시작되어 진행 중
 
         self._cached_area_lat: float | None = None
         self._cached_area_lon: float | None = None
@@ -355,10 +376,30 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
     async def find_uv_area(self, lat: float, lon: float) -> tuple[str, str]:
         return await self._find_admin_area(lat, lon)
 
-    async def async_setup(self) -> None:
-        from homeassistant.helpers.event import async_track_time_change
+    def _now(self) -> datetime:
+        return datetime.now(self.api.tz)
 
-        async def _scheduled_update(now):
+    def _pause_zones_apply(self) -> bool:
+        """pause_zones는 모바일 기기(device_tracker/person)에만 적용된다."""
+        return bool(
+            _is_mobile_entity(self.entry.data.get(CONF_LOCATION_ENTITY, ""))
+            and self.entry.options.get("pause_zones", [])
+        )
+
+    async def async_setup(self) -> None:
+        self._unsub_timer = async_track_time_change(
+            self.hass, self._async_scheduled_update, minute=_SCHEDULED_MINUTE, second=0
+        )
+
+        if self._pause_zones_apply():
+            self._in_pause_zone_state = self._in_pause_zone(*self._resolve_location())
+            self._unsub_location = async_track_state_change_event(
+                self.hass, [self.entry.data[CONF_LOCATION_ENTITY]], self._handle_location_change
+            )
+
+    async def _async_scheduled_update(self, now) -> None:
+        self._scheduled_pending = True
+        try:
             import sys
             if "pytest" not in sys.modules:
                 delay = 10 + (zlib.adler32(str(self.entry.entry_id).encode()) % 21)
@@ -366,15 +407,59 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("[%s] 동시 호출 방지를 위해 %d초 후 업데이트를 시작합니다.", self.entry.data.get(CONF_PREFIX, "kma"), delay)
                     await asyncio.sleep(delay)
             await self.async_refresh()
-
-        self._unsub_timer = async_track_time_change(
-            self.hass, _scheduled_update, minute=15, second=0
-        )
+        finally:
+            self._scheduled_pending = False
 
     def async_teardown(self) -> None:
-        if self._unsub_timer:
-            self._unsub_timer()
-            self._unsub_timer = None
+        for attr in ("_unsub_timer", "_unsub_location", "_unsub_exit_wait"):
+            unsub = getattr(self, attr)
+            if unsub:
+                unsub()
+                setattr(self, attr, None)
+
+    # ── pause_zones 이탈 시 갱신 ────────────────────────────────────────────
+    @callback
+    def _handle_location_change(self, event) -> None:
+        """위치 센서가 바뀔 때 존 안→밖 전환만 골라 5분 대기를 예약한다."""
+        lat, lon = self._resolve_location()
+        if lat is None:
+            return
+        in_zone = self._in_pause_zone(lat, lon)
+        was_in_zone, self._in_pause_zone_state = self._in_pause_zone_state, in_zone
+
+        if in_zone:
+            self._cancel_exit_wait()
+        elif was_in_zone:
+            self._cancel_exit_wait()
+            self._exit_detected_at = self._now()
+            self._unsub_exit_wait = async_call_later(
+                self.hass, _EXIT_WAIT, self._async_check_after_exit
+            )
+            _LOGGER.debug("pause_zones 이탈 감지 → %s 후 판정", _EXIT_WAIT)
+
+    def _cancel_exit_wait(self) -> None:
+        if self._unsub_exit_wait:
+            self._unsub_exit_wait()
+            self._unsub_exit_wait = None
+
+    async def _async_check_after_exit(self, _now) -> None:
+        """이탈 후 5분 뒤, 아직 존 밖이고 :15 정기 업데이트가 대신해주지 못할 때만 갱신한다."""
+        self._unsub_exit_wait = None
+        lat, lon = self._resolve_location()
+        if lat is None or self._in_pause_zone(lat, lon):
+            return
+        if self._scheduled_pending or self._update_lock.locked():
+            _LOGGER.debug("pause_zones 이탈 갱신 생략: 정기 업데이트 진행 중")
+            return
+        if self._exit_detected_at and self._last_update_ok_at \
+                and self._last_update_ok_at >= self._exit_detected_at:
+            _LOGGER.debug("pause_zones 이탈 갱신 생략: 이탈 이후 이미 갱신됨")
+            return
+        if self._now().minute < _SCHEDULED_MINUTE:
+            _LOGGER.debug("pause_zones 이탈 갱신 생략: :%02d 정기 업데이트에 맡김", _SCHEDULED_MINUTE)
+            return
+        self._update_reason = "존 이탈"
+        await self.async_refresh()
 
     async def _restore_approved_apis(self) -> None:
         if self._approved_store_loaded:
@@ -530,6 +615,29 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
                 if is_am and wf_am_tomorrow: entry["condition"] = self.api.kor_to_condition(wf_am_tomorrow)
                 elif not is_am and wf_pm_tomorrow: entry["condition"] = self.api.kor_to_condition(wf_pm_tomorrow)
 
+    def _in_pause_zone(self, lat: float, lon: float) -> bool:
+        """현재 위치가 pause_zones로 지정한 존 중 하나의 반경 안인지 확인한다."""
+        for zone_id in self.entry.options.get("pause_zones", []):
+            zone_state = self.hass.states.get(zone_id)
+            if not zone_state:
+                _LOGGER.debug("pause_zones: '%s' 엔티티 없음 → 스킵", zone_id)
+                continue
+            try:
+                z_lat = float(zone_state.attributes["latitude"])
+                z_lon = float(zone_state.attributes["longitude"])
+                z_rad = float(zone_state.attributes.get("radius", 100)) / 1000  # m → km
+            except (KeyError, TypeError, ValueError):
+                _LOGGER.debug("pause_zones: '%s' 속성 오류 → 스킵", zone_id)
+                continue
+            dist = haversine(lat, lon, z_lat, z_lon)
+            if dist <= z_rad:
+                _LOGGER.debug(
+                    "pause_zones: '%s' 반경 %.0fm 안 (%.0fm 거리) → 폴링 중단",
+                    zone_id, z_rad * 1000, dist * 1000,
+                )
+                return True
+        return False
+
     # ── 메인 업데이트 ───────────────────────────────────────────────────────
     async def _async_update_data(self) -> dict:
         async with self._update_lock:
@@ -555,28 +663,10 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
                 # 자동 업데이트일 때만 적용
                 # 재시작/수동 업데이트는 존 안에 있어도 항상 폴링 허용
                 # device_tracker/person 기기에만 적용 (zone.* 기기는 무시)
-                _location_entity = self.entry.data.get(CONF_LOCATION_ENTITY, "")
-                if _reason == "자동 업데이트" and _is_mobile_entity(_location_entity):
-                    _pause_zones = self.entry.options.get("pause_zones", [])
-                    for _zone_id in _pause_zones:
-                        _zone_state = self.hass.states.get(_zone_id)
-                        if not _zone_state:
-                            _LOGGER.debug("pause_zones: '%s' 엔티티 없음 → 스킵", _zone_id)
-                            continue
-                        try:
-                            _z_lat = float(_zone_state.attributes["latitude"])
-                            _z_lon = float(_zone_state.attributes["longitude"])
-                            _z_rad = float(_zone_state.attributes.get("radius", 100)) / 1000  # m → km
-                        except (KeyError, TypeError, ValueError):
-                            _LOGGER.debug("pause_zones: '%s' 속성 오류 → 스킵", _zone_id)
-                            continue
-                        _dist = haversine(curr_lat, curr_lon, _z_lat, _z_lon)
-                        if _dist <= _z_rad:
-                            _LOGGER.debug(
-                                "pause_zones: '%s' 반경 %.0fm 안 (%.0fm 거리) → 폴링 중단",
-                                _zone_id, _z_rad * 1000, _dist * 1000,
-                            )
-                            return self._cached_data or {"weather": {}, "air": {}}
+                if _reason == "자동 업데이트" and self._pause_zones_apply():
+                    self._in_pause_zone_state = self._in_pause_zone(curr_lat, curr_lon)
+                    if self._in_pause_zone_state:
+                        return self._cached_data or {"weather": {}, "air": {}}
 
                 # 기기 이동 여부 확인 (기존 테스트와의 호환성을 위해 외부에서 판단)
                 is_moved = (
@@ -631,7 +721,7 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
                     temp_changed = self._update_daily_temperatures(new_data["raw_forecast"])
 
                     reason = getattr(self, "_update_reason", "자동 업데이트")
-                    is_scheduled = (reason == "자동 업데이트")
+                    is_scheduled = (reason in _SCHEDULED_REASONS)
 
                     should_update_summary = is_scheduled or is_moved or is_new_day or (self._wf_pm_today is None)
 
@@ -689,6 +779,7 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
                 weather["observation_attrs"]     = obs_attrs
 
                 self._cached_data = new_data
+                self._last_update_ok_at = self._now()
                 await self._save_approved_apis()
                 await self._save_api_calls()
                 await self._save_station_cache()
