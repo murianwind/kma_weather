@@ -46,7 +46,8 @@ def move_to(coord, location):
 
 class TestExitDetection:
 
-    def test_exit_from_zone_schedules_five_minute_wait(self):
+    @pytest.mark.asyncio
+    async def test_exit_from_zone_schedules_five_minute_wait(self):
         """
         [Given] 존 안에 있던 모바일 기기
         [When]  위치가 존 밖으로 바뀜
@@ -60,7 +61,8 @@ class TestExitDetection:
         assert call_later.call_count == 1
         assert call_later.call_args.args[1] == timedelta(minutes=5)
 
-    def test_still_inside_zone_schedules_nothing(self):
+    @pytest.mark.asyncio
+    async def test_still_inside_zone_schedules_nothing(self):
         """
         [Given] 존 안에 있는 기기
         [When]  존 안에서 위치만 바뀜
@@ -73,7 +75,8 @@ class TestExitDetection:
 
         call_later.assert_not_called()
 
-    def test_already_outside_schedules_nothing(self):
+    @pytest.mark.asyncio
+    async def test_already_outside_schedules_nothing(self):
         """
         [Given] 이미 존 밖에서 이동 중인 기기 (기존 동작)
         [When]  위치가 바뀜
@@ -86,7 +89,8 @@ class TestExitDetection:
 
         call_later.assert_not_called()
 
-    def test_reentering_zone_during_wait_cancels_pending_check(self):
+    @pytest.mark.asyncio
+    async def test_reentering_zone_during_wait_cancels_pending_check(self):
         """
         [Given] 존 이탈 후 5분 대기 중
         [When]  다시 존 안으로 들어옴
@@ -102,7 +106,8 @@ class TestExitDetection:
         cancel.assert_called_once()
         assert coord._in_pause_zone_state is True
 
-    def test_flapping_exit_keeps_single_pending_check(self):
+    @pytest.mark.asyncio
+    async def test_flapping_exit_keeps_single_pending_check(self):
         """
         [Given] 존 경계에서 위치가 흔들려 이탈·재진입·이탈이 반복됨
         [When]  각 전환을 처리
@@ -371,7 +376,8 @@ class TestSetupAndTeardown:
 
         track.assert_not_called()
 
-    def test_teardown_cancels_listener_and_pending_check(self):
+    @pytest.mark.asyncio
+    async def test_teardown_cancels_listener_and_pending_check(self):
         """
         [Given] 위치 구독과 5분 대기가 걸려 있음
         [When]  async_teardown
