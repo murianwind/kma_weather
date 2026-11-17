@@ -896,8 +896,11 @@ class KMAWeatherAPI:
                 pair = _WARN_TYPE_MAP.get(wv)
                 if pair:
                     stress = str(item.get("warnStress", "0"))
-                    if stress == "2" and len(pair) > 2:
-                        api_result[wv] = pair[2]
+                    if stress == "2":
+                        # 중대경보는 특보 종류와 무관한 수준값(0 주의보·1 경보·2 중대경보)이지만
+                        # 중대경보 이름은 폭염에만 있다. 이름이 없는 종류는 주의보로 낮춰 보이지
+                        # 않도록 경보로 표시한다.
+                        api_result[wv] = pair[2] if len(pair) > 2 else pair[1]
                     elif stress == "1":
                         api_result[wv] = pair[1]
                     else:
