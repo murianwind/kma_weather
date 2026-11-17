@@ -270,6 +270,8 @@ RESPONSE_BODIES = {
     "정상": {"response": {"header": {"resultCode": "00"}, "body": {"items": {"item": [{"category": "TMP"}]}}}},
     "항목없음": {"response": {"header": {"resultCode": "00"}, "body": {"items": {"item": []}}}},
     "(None)": None,
+    "단건dict": {"response": {"header": {"resultCode": "00"}, "body": {"items": {"item": {"category": "TMP"}}}}},
+    "items빈문자열": {"response": {"header": {"resultCode": "00"}, "body": {"items": ""}}},
 }
 
 
