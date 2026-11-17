@@ -1,0 +1,15 @@
+# 날씨 상태 센서(현재/오전/오후 날씨 문구)의 아이콘: 한글 날씨 상태 → mdi 아이콘, 알 수 없는 값은 그 센서에 정의된 기본 아이콘
+# 기법: 동등분할(EP) — 9가지 상태 + 알 수 없는 값,  같은 규칙이 5개 날씨 문구 센서(현재·오늘 오전/오후·내일 오전/오후)에 모두 적용되는지 센서 종류를 곱해서 확인
+# 기대_아이콘: (센서 기본) = SENSOR_TYPES 에 정의된 그 센서의 기본 아이콘 (센서마다 다를 수 있음)
+# 센서 종류: 테스트 코드가 current_condition_kor / wf_am_today / wf_pm_today / wf_am_tomorrow / wf_pm_tomorrow 로 반복
+id,기법,분류,값,기대_아이콘
+WI01,동등분할,맑음,맑음,mdi:weather-sunny
+WI02,동등분할,구름많음,구름많음,mdi:weather-partly-cloudy
+WI03,동등분할,흐림,흐림,mdi:weather-cloudy
+WI04,동등분할,비,비,mdi:weather-rainy
+WI05,동등분할,눈,눈,mdi:weather-snowy
+WI06,동등분할,소나기,소나기,mdi:weather-pouring
+WI07,동등분할,비/눈,비/눈,mdi:weather-snowy-rainy
+WI08,동등분할,빗방울,빗방울,mdi:weather-rainy
+WI09,동등분할,눈날림,눈날림,mdi:weather-snowy
+WI10,동등분할,알 수 없는 값은 센서 기본 아이콘,우박,(센서 기본)
