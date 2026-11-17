@@ -4,3 +4,6 @@ pytest-freezegun
 pytest-cov
 pytest-homeassistant-custom-component
 coverage
+pytest-bdd
+pyyaml
+allpairspy

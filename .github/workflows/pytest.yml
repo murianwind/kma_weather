@@ -36,7 +36,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio pytest-freezegun \
                       pytest-homeassistant-custom-component \
-                      coverage pytest-cov
+                      coverage pytest-cov \
+                      pytest-bdd pyyaml allpairspy
 
           if [ -f custom_components/kma_weather/manifest.json ]; then
             REQ_LIST=$(jq -r '.requirements[]?' custom_components/kma_weather/manifest.json)

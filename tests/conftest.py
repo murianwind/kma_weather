@@ -4,6 +4,11 @@ from datetime import timedelta
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+# fast_sleep 등이 patch 대상 경로(custom_components.kma_weather.*)를 해석하려면
+# 모듈이 먼저 import되어 있어야 한다. 테스트 파일 하나만 단독 실행해도 동작하도록 미리 import.
+import custom_components.kma_weather.api_kma  # noqa: F401
+import custom_components.kma_weather.coordinator  # noqa: F401
+
 # 1. DNS 스레드 패치
 @pytest.fixture(autouse=True)
 def allow_pycares_thread(monkeypatch):
