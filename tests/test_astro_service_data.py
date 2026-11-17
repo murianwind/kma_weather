@@ -3,7 +3,7 @@
   time_parse.csv            _parse_time_str 의 입력 → 시각/오류
   geocode_results.csv       _geocode_ko 의 Nominatim 응답 → 좌표
   astro_service_errors.csv  _handle_get_astronomical_info 가 계산 전에 거르는 입력·환경 오류
-(천문 계산 자체는 test_astro_sensors.py)
+(천문 계산 자체는 test_astronomy_data.py 와 features/astronomical_service.feature)
 """
 from datetime import datetime, time, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch

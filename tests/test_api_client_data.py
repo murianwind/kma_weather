@@ -81,20 +81,14 @@ def address_outcomes(token):
         return ["{}"]
     if token == "(Timeout)":
         return [TimeoutError(), TimeoutError()]
-    if token == "(HTTP500)":
-        return [500, 500]
+    if token in ("(HTTP500)", "(HTTP429)"):
+        return [int(token[5:8])] * 2
+    if token == "(주소 없음)":
+        return [json.dumps({"address": {}})]
     return [json.dumps({"address": dict(pair.split("=") for pair in token.split(";"))})]
 
 
-def address_params():
-    params = []
-    for row in read_csv("address_lookup.csv"):
-        marks = [pytest.mark.xfail(strict=True, reason=row["알려진문제"])] if row["알려진문제"] else []
-        params.append(pytest.param(row, id=f"{row['id']}-{row['분류']}", marks=marks))
-    return params
-
-
-@pytest.mark.parametrize("row", address_params())
+@pytest.mark.parametrize("row", table_params(read_csv("address_lookup.csv"), lambda r: r["분류"]))
 def test_get_address(row):
     """
     [Given] Nominatim 이 행정 단위별 주소 / 빈 응답 / 오류를 돌려줌

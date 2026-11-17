@@ -66,6 +66,16 @@ def press_twice(hass, world, seconds):
     press_at(hass, world, T0 + timedelta(seconds=float(seconds)))
 
 
+@when(parsers.parse('갱신이 끝나 갱신 이유가 "{reason}" 로 돌아간다'))
+def refresh_finished(world, reason):
+    world["coordinator"]._update_reason = reason
+
+
+@when(parsers.parse("버튼을 {seconds}초 뒤에 다시 누른다"))
+def press_again(hass, world, seconds):
+    press_at(hass, world, T0 + timedelta(seconds=float(seconds)))
+
+
 # ── 그러면 (Then) ────────────────────────────────────────────────────────────
 @then(parsers.parse('업데이트 버튼 "{entity_id}" 는 만들어진다'))
 def button_created(hass, entity_id):
