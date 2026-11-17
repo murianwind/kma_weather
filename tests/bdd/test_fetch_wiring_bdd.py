@@ -1,4 +1,6 @@
 """BDD: 구역코드·좌표가 각 조회로 전달되는 배선 — features/fetch_wiring.feature"""
+import logging
+
 import pytest
 from unittest.mock import AsyncMock
 from pytest_bdd import given, parsers, scenarios, then, when
@@ -12,9 +14,9 @@ scenarios("features/fetch_wiring.feature")
 
 
 @pytest.fixture
-def world():
+def world(caplog):
     coordinator_module._load_area_data()
-    return World(calls={})
+    return World(calls={}, caplog=caplog)
 
 
 # ── 조건 (Given) ─────────────────────────────────────────────────────────────
@@ -61,6 +63,19 @@ def warning_returns(world, text):
     world.warning_text = text
 
 
+@given(parsers.parse('꽃가루 조회는 등급 "{grade}"을 돌려준다'))
+def pollen_returns(world, grade):
+    async def pollen(now, area_no, area_name):
+        world.calls["pollen"] = (area_no, area_name)
+        return {"worst": grade}
+    world.api._get_pollen = pollen
+
+
+@given("주소 조회 중 예외가 발생한다")
+def address_raises(world):
+    world.api._get_address = AsyncMock(side_effect=Exception("boom"))
+
+
 # ── 만일 (When) ──────────────────────────────────────────────────────────────
 def fetch(world, **overrides):
     args = dict(lat=37.56, lon=126.98, nx=60, ny=127, reg_id_temp="11B10101", reg_id_land="11B00000",
@@ -81,6 +96,11 @@ def fetch_with_reg_ids(world, temp, land):
 @when(parsers.parse('특보구역 "{code}"으로 데이터를 가져온다'))
 def fetch_with_warn_code(world, code):
     fetch(world, warn_area_code=code)
+
+
+@when(parsers.parse('꽃가루 지역 "{area_no}", 이름 "{area_name}"로 데이터를 가져온다'))
+def fetch_with_pollen_area(world, area_no, area_name):
+    fetch(world, pollen_area_no=area_no, pollen_area_name=area_name)
 
 
 @when(parsers.parse("위도 {lat:f}, 경도 {lon:f}로 데이터를 가져온다"))
@@ -112,3 +132,23 @@ def fetched_warning(world, text):
 @then(parsers.parse("대기질 조회에 위도 {lat:f}, 경도 {lon:f}이 전달된다"))
 def air_args(world, lat, lon):
     assert world.calls["air"] == pytest.approx((lat, lon))
+
+
+@then(parsers.parse('꽃가루 조회에 지역 "{area_no}", 이름 "{area_name}"이 전달된다'))
+def pollen_args(world, area_no, area_name):
+    assert world.calls["pollen"] == (area_no, area_name)
+
+
+@then(parsers.parse('가져온 데이터의 꽃가루 최악 등급은 "{grade}"이다'))
+def fetched_pollen(world, grade):
+    assert world.data["pollen"]["worst"] == grade
+
+
+@then("가져온 데이터는 없다")
+def no_data(world):
+    assert world.data is None
+
+
+@then("ERROR 로그가 한 건 남는다")
+def one_error_log(world):
+    assert len([r for r in world.caplog.records if r.levelno == logging.ERROR]) == 1

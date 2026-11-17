@@ -33,7 +33,6 @@ from .const import (
     UV_GRADE_MAX         as _UV_GRADE_MAX,
 )
 _POLLEN_KINDS: tuple[str, ...] = tuple(_POLLEN_SEASONS.keys())
-_POLLEN_GRADE_RANK = {"좋음": 1, "보통": 2, "나쁨": 3, "매우나쁨": 4}
 
 # ── _fetch 재시도 정책 ───────────────────────────────────────────────────
 _FETCH_MAX_ATTEMPTS = 2                                 # 최초 1회 + 재시도 1회
@@ -755,9 +754,9 @@ class KMAWeatherAPI:
         adj = now - timedelta(minutes=10)
         hour = adj.hour
 
-        if hour >= 23 or hour < 2:
+        if hour < 2:
             base_h = 20
-            base_d = (adj - timedelta(days=1)).strftime("%Y%m%d") if hour < 2 else adj.strftime("%Y%m%d")
+            base_d = (adj - timedelta(days=1)).strftime("%Y%m%d")
         else:
             base_h = max(h for h in [2, 5, 8, 11, 14, 17, 20] if h <= hour)
             base_d = adj.strftime("%Y%m%d")
@@ -1262,9 +1261,7 @@ class KMAWeatherAPI:
                 # 센서 자체가 생성되지 않는 사각지대가 발생하므로 여기서도 승인 처리한다.
                 self._mark_approved("pollen")
                 grades = {k: (None if in_season[k] else "좋음") for k in _POLLEN_KINDS}
-                season_known = [g for k, g in grades.items() if in_season[k] and g is not None]
-                worst = None
-                return {**grades, "worst": worst,
+                return {**grades, "worst": None,
                         "area_name": area_name, "area_no": area_no,
                         "announcement": "데이터없음"}
             if check_code == "00":
@@ -1295,8 +1292,6 @@ class KMAWeatherAPI:
             code = self._extract_result_code(r)
             if code and self._check_unsubscribed("pollen", code):
                 return "UNSUB"
-            if code == "99":
-                return None
             if code != "00":
                 return None
             self._mark_approved("pollen")
@@ -1310,7 +1305,6 @@ class KMAWeatherAPI:
             if not val:
                 fallback = "tomorrow" if fetch_key == "today" else "today"
                 val = items[0].get(fallback, "")
-            if code == "99": return None
             return _POLLEN_GRADE.get(str(val)) if val else None
 
         async def _get_grade(kind: str) -> str | None:
@@ -1384,9 +1378,6 @@ class KMAWeatherAPI:
             pine_g = None if pine_g == "UNSUB" else pine_g
             oak_g = None if oak_g == "UNSUB" else oak_g
             grass_g = None if grass_g == "UNSUB" else grass_g
-
-            if pine_g is None and oak_g is None and grass_g is None:
-                return {} if not any(in_season.values()) else {}
 
             order = ["좋음", "보통", "나쁨", "매우나쁨"]
             season_known = [

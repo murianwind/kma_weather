@@ -1,0 +1,9 @@
+# Nominatim 요청에 쓰는 User-Agent: 설치 UUID(있으면) 앞 12자리, 없으면 API 키 SHA-1 앞 12자리
+# 기법: 동등분할(EP) — hass 없음 / hass+UUID / hass 있지만 UUID 없음 / UUID 가 12자리보다 짧음
+# hass_uuid: (hass 없음) = hass 를 넘기지 않음, (UUID 없음) = hass.installation_uuid 가 None
+id,기법,분류,api_key,hass_uuid,기대_User-Agent
+UA01,동등분할,hass 없음: 키 해시 사용,test_key,(hass 없음),HomeAssistant-KMA-Weather/00942f466867
+UA02,동등분할,hass 있음: 설치 UUID 앞 12자리,test_key,12345678-1234-5678-1234-567812345678,HomeAssistant-KMA-Weather/123456781234
+UA03,동등분할,hass 는 있으나 UUID 없음: 키 해시 사용,test_key,(UUID 없음),HomeAssistant-KMA-Weather/00942f466867
+UA04,동등분할,UUID 가 12자리보다 짧으면 있는 만큼,test_key,abcd-ef,HomeAssistant-KMA-Weather/abcdef
+UA05,동등분할,다른 키는 다른 해시,a b,(hass 없음),HomeAssistant-KMA-Weather/7dbde9350412

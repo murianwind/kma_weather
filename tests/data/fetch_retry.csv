@@ -1,6 +1,6 @@
-# _fetch(에어코리아 등 공통 호출)의 재시도와 최종 실패 로그: 시도마다의 결과 → 시도 횟수 / 반환값 / 로그
+# _fetch(공통 호출)의 재시도와 최종 실패 로그: 시도마다의 결과 → 시도 횟수 / 반환값 / 로그
 # 기법: 동등분할(EP) — 오류 종류별 대표값(재시도 대상 / 비대상),  경계값분석(BVA) — 시도 한도(최대 2회) 직전·초과
-# 시도_순서(;로 구분): 정상 / Timeout / 연결끊김 / 예외500 / 예외503 / 예외400 / ValueError / HTTP429 / HTTP503 / HTTP401 / HTTP404
+# 시도_순서(;로 구분): 정상 / Timeout / 연결끊김 / 예외500 / 예외503 / 예외400 / ValueError / HTTP429·500·502·503·504 / HTTP401·403·404 / 비JSON / JSON배열
 #   예외NNN = 요청 중 ClientResponseError(status=NNN),  HTTPNNN = 응답 상태 코드가 NNN 인 정상 수신
 # fail_log_level: 최종 실패 로그 레벨 (기본 ERROR, 에어코리아는 DEBUG 로 낮춰 호출)
 # 기대_결과: ok = {"ok": 1} / (None) = None / http:NNN = {"_http_error": "NNN"}
@@ -21,3 +21,9 @@ FR10,동등분할,HTTP 429 후 재시도로 성공,HTTP429;정상,ERROR,2,ok,1,0
 FR11,동등분할,HTTP 503 두 번: 오류 코드를 돌려줌,HTTP503;HTTP503,ERROR,2,http:503,2,0,재시도 실패
 FR12,동등분할,HTTP 401 은 재시도 없이 인증 실패로 처리,HTTP401,ERROR,1,http:401,0,0,-
 FR13,동등분할,HTTP 404 는 재시도 없이 미신청으로 처리,HTTP404,ERROR,1,http:404,0,0,-
+FR14,동등분할,HTTP 500 두 번: 오류 코드를 돌려줌,HTTP500;HTTP500,ERROR,2,http:500,2,0,재시도 실패
+FR15,동등분할,HTTP 502 후 재시도로 성공,HTTP502;정상,ERROR,2,ok,1,0,일시적 서버 오류
+FR16,동등분할,HTTP 504 두 번: 오류 코드를 돌려줌,HTTP504;HTTP504,ERROR,2,http:504,2,0,재시도 실패
+FR17,동등분할,HTTP 403 은 재시도 없이 인증 실패로 처리,HTTP403,ERROR,1,http:403,0,0,-
+FR18,동등분할,JSON 이 아닌 본문(XML 등)은 재시도 없이 버림,비JSON,ERROR,1,(None),0,1,응답 파싱 실패
+FR19,동등분할,JSON 이지만 객체가 아닌 본문(배열)은 버림,JSON배열,ERROR,1,(None),0,1,JSON 객체가 아닙니다

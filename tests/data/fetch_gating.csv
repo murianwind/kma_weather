@@ -1,0 +1,13 @@
+# fetch_data: 승인/대기 중인 API 만 호출한다 (둘 다 아니면 건너뜀) — 승인·대기 목록 → 실제로 호출되는 조회
+# 기법: 동등분할(EP) — 전부 대기(처음 시작) / 전부 승인 / 하나도 없음 / API 하나만 있음,  air 는 station 이 있어도 호출
+# 승인, 대기: ; 로 구분한 API 이름 (short mid air station warning pollen uv),  (없음) = 비어 있음
+# 기대_호출: 호출된 조회 (air warning pollen uv 중, ; 로 구분),  (없음) = 하나도 호출 안 함
+id,기법,분류,승인,대기,기대_호출
+FG01,동등분할,처음 시작: 전부 대기 상태면 모두 호출,(없음),air;station;warning;pollen;uv,air;warning;pollen;uv
+FG02,동등분할,전부 승인되면 모두 호출,air;warning;pollen;uv,(없음),air;warning;pollen;uv
+FG03,동등분할,승인도 대기도 없으면 아무것도 호출 안 함,short;mid,(없음),(없음)
+FG04,동등분할,대기질만 승인,air,(없음),air
+FG05,동등분할,측정소만 대기여도 대기질 조회,(없음),station,air
+FG06,동등분할,특보만 승인,warning,(없음),warning
+FG07,동등분할,꽃가루만 대기,(없음),pollen,pollen
+FG08,동등분할,자외선만 대기,(없음),uv,uv

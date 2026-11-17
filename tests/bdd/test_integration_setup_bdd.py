@@ -1,5 +1,4 @@
 """BDD: 통합구성요소 등록과 해제 — features/integration_setup.feature (실제 Home Assistant, 코루틴은 run_on 으로 실행)"""
-import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from custom_components.kma_weather.const import DOMAIN
