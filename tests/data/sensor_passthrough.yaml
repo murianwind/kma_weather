@@ -1,0 +1,69 @@
+# 센서가 API 원본값의 형(type)을 바꾸지 않고 그대로 내보내는가: 정수는 int, 소수는 float, 문자열은 str
+# 기법: 동등분할 — 값의 형(정수 / 소수 / 문자열)별 대표 센서
+# weather / air: 코디네이터 데이터, daily: 일일 최고/최저 누적값
+- id: SP01
+  분류: 정수 기온은 int
+  센서: TMP
+  weather: {TMP: 22}
+  기대: 22
+  기대_타입: int
+- id: SP02
+  분류: 오늘 최고기온(누적값)도 int
+  센서: TMX_today
+  daily: {max: 25, min: 15}
+  기대: 25
+  기대_타입: int
+- id: SP03
+  분류: 오늘 최저기온(누적값)도 int
+  센서: TMN_today
+  daily: {max: 25, min: 15}
+  기대: 15
+  기대_타입: int
+- id: SP04
+  분류: 내일 최고기온 int
+  센서: TMX_tomorrow
+  weather: {TMX_tomorrow: 26}
+  기대: 26
+  기대_타입: int
+- id: SP05
+  분류: 내일 최저기온 int
+  센서: TMN_tomorrow
+  weather: {TMN_tomorrow: 16}
+  기대: 16
+  기대_타입: int
+- id: SP06
+  분류: 소수점이 있는 풍속은 float
+  센서: WSD
+  weather: {WSD: 2.1}
+  기대: 2.1
+  기대_타입: float
+- id: SP07
+  분류: 소수점이 있는 체감온도는 float
+  센서: apparent_temp
+  weather: {apparent_temp: 23.4}
+  기대: 23.4
+  기대_타입: float
+- id: SP08
+  분류: 정수 미세먼지 int
+  센서: pm10Value
+  air: {pm10Value: 35}
+  기대: 35
+  기대_타입: int
+- id: SP09
+  분류: 초미세먼지 int
+  센서: pm25Value
+  air: {pm25Value: 15}
+  기대: 15
+  기대_타입: int
+- id: SP10
+  분류: 소수점이 있는 미세먼지는 float
+  센서: pm10Value
+  air: {pm10Value: 35.5}
+  기대: 35.5
+  기대_타입: float
+- id: SP11
+  분류: 문자열 상태값은 그대로
+  센서: rain_start_time
+  weather: {rain_start_time: 강수없음}
+  기대: 강수없음
+  기대_타입: str
