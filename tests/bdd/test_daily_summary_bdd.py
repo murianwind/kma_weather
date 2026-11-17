@@ -61,11 +61,15 @@ def api_no_summary(world):
 
 
 # ── 만일 (When) ──────────────────────────────────────────────────────────────
-@when("정기 업데이트가 실행된다")
-def scheduled_update(world):
+UPDATE_REASONS = {"정기": "자동 업데이트", "수동": "업데이트 액션", "재시작": "재시작"}
+
+
+@when(parsers.parse("{kind} 업데이트가 실행된다"))
+def update(world, kind):
+    kind = kind.strip('"')
     world.coord.api.fetch_data = AsyncMock(return_value={
         "weather": {"TMP": 20, **world.api_summary}, "air": {}, "pollen": None, "raw_forecast": {}})
-    world.coord._update_reason = "자동 업데이트"
+    world.coord._update_reason = UPDATE_REASONS[kind]
     world.result = run(world.coord._async_update_data())
 
 
