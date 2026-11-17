@@ -4,6 +4,7 @@
   - 키워드 목록 보기 : python tests/keyword/catalog.py   (문서: tests/keyword/KEYWORDS.md)
   - 시나리오 목록 보기: pytest tests/keyword --collect-only -q
 """
+import logging
 from pathlib import Path
 
 import pytest
@@ -16,15 +17,16 @@ SCENARIOS = load_scenarios(HERE / "scenarios")
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: f"{s.source}::{s.name}")
-def test_keyword_scenario(scenario):
+def test_keyword_scenario(scenario, caplog):
     """시나리오의 단계(키워드)를 순서대로 실행한다. 어느 단계에서 실패했는지 메시지에 드러난다."""
-    world = World()
+    world = World(caplog=caplog)
     try:
-        for number, step in enumerate(scenario.steps, start=1):
-            try:
-                REGISTRY.execute(world, step)
-            except Exception as exc:
-                raise AssertionError(f"[{scenario.name}] {number}번째 단계 {step!r} 실패: {exc!r}") from exc
+        with caplog.at_level(logging.DEBUG):
+            for number, step in enumerate(scenario.steps, start=1):
+                try:
+                    REGISTRY.execute(world, step)
+                except Exception as exc:
+                    raise AssertionError(f"[{scenario.name}] {number}번째 단계 {step!r} 실패: {exc!r}") from exc
     finally:
         for cleanup in world.get("cleanups", []):
             cleanup()

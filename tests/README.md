@@ -1,6 +1,7 @@
 # 테스트 시연 가이드
 
-같은 대상(현재 예상 강수량 센서, 일시정지 존 pause_zones)을 **세 가지 방식**으로 보여줍니다.
+도메인별로 **세 가지 방식**을 보여줍니다 (현재: 강수량, 일시정지 존 pause_zones, 자외선지수, 에어코리아/지역코드).
+한 테스트는 성격에 맞는 한 가지 방식으로만 작성해 중복을 피합니다 — 시나리오(BDD) / 긴 호출·실패 흐름(키워드) / 입력→출력 규칙(데이터).
 커버리지 측정(`--cov-branch`, Codecov)과 CI 요약은 기존 그대로 동작합니다.
 
 | 방식 | 위치 | 무엇을 보여주나 | 보는 법 |
@@ -13,10 +14,10 @@
 
 | 기법 | 적용 위치 |
 |---|---|
-| 동등분할 | `precip_amount.csv`(EP*), `pause_zone_polling.csv`, `pause_zone_visibility.csv`, `pause_zone_options.csv`, `precip_sensor_exposure.yaml` |
-| 경계값분석 | `precip_amount.csv`(BV*), `pause_zone_radius.csv`(반경 ±0.1m, 기본 반경), `pause_zone_exit.feature`(판정 분 14/15, 0/59, 성공 시각 = 이탈 시각), `precip_hourly.feature`(00:05 … 23:30) |
+| 동등분할 | `precip_amount.csv`(EP*), `pause_zone_polling.csv`, `pause_zone_visibility.csv`, `pause_zone_options.csv`, `precip_sensor_exposure.yaml`, `uv_grade.csv`(EP*), `uv_base_time.csv`(EP*), `uv_sensor_exposure.yaml`, `airkorea_fetch_retry.csv`(오류 종류별) |
+| 경계값분석 | `precip_amount.csv`(BV*), `pause_zone_radius.csv`(반경 ±0.1m, 기본 반경), `pause_zone_exit.feature`(판정 분 14/15, 0/59, 성공 시각 = 이탈 시각), `precip_hourly.feature`(00:05 … 23:30), `uv_grade.csv`(BV*: 2.9/3, 5.9/6 …), `uv_base_time.csv`(BV*: 02:59/03:00), `uv_query.feature`(발표 시각 02:59/03:00), `airkorea_fetch_retry.csv`(시도 한도 2회) |
 | 페어와이즈 | `precip_pairwise.csv` — 96조합을 16개로 (`python tests/testkit/pairwise.py` 로 생성, 쌍 커버 여부는 테스트가 검증) |
-| 상태 전이 | `pause_zone_commute.yaml`(집 안 → 이탈 → 대기 → 판정), `pause_zone_lifecycle.feature` |
+| 상태 전이 | `pause_zone_commute.yaml`(집 안 → 이탈 → 대기 → 판정), `pause_zone_lifecycle.feature`, `airkorea_air_quality.yaml`(캐시 → 이동 → 실패 → 보완) |
 
 ## 자주 쓰는 명령
 
