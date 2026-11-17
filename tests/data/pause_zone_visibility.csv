@@ -1,0 +1,9 @@
+# 옵션 화면에 pause_zones 항목이 보이는가 (모바일 기기에만 보임)
+# 기법: 동등분할 — 위치 엔티티 도메인별 대표값, 존 기기로 바꾼 뒤 남은 이전 설정
+# 저장된_pause_zones: 이전에 저장돼 남아 있는 값 ((없음) = 없음)
+id,분류,위치_엔티티,저장된_pause_zones,기대_노출
+VS01,device_tracker 는 노출,device_tracker.phone,(없음),예
+VS02,person 은 노출,person.minsu,(없음),예
+VS03,zone.home 은 숨김,zone.home,(없음),아니오
+VS04,zone.office 도 숨김,zone.office,(없음),아니오
+VS05,존 기기로 바꿨고 이전 설정이 남아 있어도 숨김,zone.home,zone.home,아니오

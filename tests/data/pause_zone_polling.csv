@@ -1,0 +1,19 @@
+# 정기 업데이트(:15) 시 일시정지 존 안이면 API 를 호출하지 않는가
+# 기법: 동등분할 — 기기 종류 × pause_zones 설정 × 존 상태 × 현재 위치 × API 결과의 대표 조합
+# 위치: 집 안 / 직장 안 / 집 밖(5km) / 모든 존 밖
+# 존_상태: 정상 / 전부삭제 / 속성없음 / 첫째삭제(직장만 남음)
+# pause_zones: 세미콜론으로 구분, (없음)=빈 목록, (키없음)=옵션 키 자체가 없는 기존 사용자
+id,분류,위치_엔티티,pause_zones,존_상태,위치,API결과,기대_API호출,기대_온도
+ZP01,존 안: 캐시만 반환,device_tracker.phone,zone.home,정상,집 안,성공,0,20
+ZP02,존 밖: 새 데이터,device_tracker.phone,zone.home,정상,집 밖,성공,1,25
+ZP03,person 도 동일하게 적용,person.minsu,zone.home,정상,집 안,성공,0,20
+ZP04,여러 존 중 두 번째 안,device_tracker.phone,zone.home;zone.office,정상,직장 안,성공,0,20
+ZP05,여러 존 모두 밖,device_tracker.phone,zone.home;zone.office,정상,모든 존 밖,성공,1,25
+ZP06,삭제된 존은 건너뛰고 폴링,device_tracker.phone,zone.home,전부삭제,집 안,성공,1,25
+ZP07,좌표 속성 없는 존은 건너뛰고 폴링,device_tracker.phone,zone.home,속성없음,집 안,성공,1,25
+ZP08,첫째 존이 삭제돼도 둘째 존 안이면 중단,device_tracker.phone,zone.home;zone.office,첫째삭제,직장 안,성공,0,20
+ZP09,zone 기기는 pause_zones 무시,zone.home,zone.home,정상,집 안,성공,1,25
+ZP10,위치 엔티티 없음은 pause_zones 무시,(없음),zone.home,정상,집 안,성공,1,25
+ZP11,pause_zones 가 비어 있으면 기존과 동일,device_tracker.phone,(없음),정상,집 안,성공,1,25
+ZP12,옵션 키가 없는 기존 사용자도 오류 없이 폴링,device_tracker.phone,(키없음),정상,집 안,성공,1,25
+ZP13,존 밖에서 API 실패하면 캐시 유지,device_tracker.phone,zone.home,정상,집 밖,실패,1,20

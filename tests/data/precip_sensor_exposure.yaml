@@ -1,0 +1,38 @@
+# 센서가 코디네이터 데이터를 상태/속성으로 어떻게 노출하는가 (동등분할)
+# weather: 코디네이터 데이터의 weather 부분 / 기대_상태 / 기대_속성 (None 이면 속성 없음)
+- id: SX01
+  분류: 시간대별 값과 표기가 모두 있음
+  weather:
+    precip_amount: 1.0
+    hourly_precipitation_mm: {15시: 1.0, 16시: 0}
+    precip_amount_display: 1.0mm
+  기대_상태: 1.0
+  기대_속성: {15시: 1.0, 16시: 0, 표기: 1.0mm}
+- id: SX02
+  분류: 시간대별 값만 있고 표기 없음
+  weather:
+    precip_amount: 1.0
+    hourly_precipitation_mm: {15시: 1.0}
+  기대_상태: 1.0
+  기대_속성: {15시: 1.0}
+- id: SX03
+  분류: 표기만 있음(시간대별 값 비어 있음)
+  weather:
+    precip_amount: 0.0
+    hourly_precipitation_mm: {}
+    precip_amount_display: 강수없음
+  기대_상태: 0.0
+  기대_속성: {표기: 강수없음}
+- id: SX04
+  분류: 시간대별 값도 표기도 없음(데이터 수신 실패 캐시)
+  weather:
+    precip_amount: 0.0
+  기대_상태: 0.0
+  기대_속성: null
+- id: SX05
+  분류: 속성이 키로 감싸지지 않고 평탄하게 노출됨
+  weather:
+    precip_amount: 4.0
+    hourly_precipitation_mm: {08시: 4.0}
+  기대_상태: 4.0
+  기대_속성: {08시: 4.0}
