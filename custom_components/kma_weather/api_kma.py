@@ -186,6 +186,20 @@ _AIRKOREA_DISTRICT_CODES: list[tuple[str, str]] = [
 ]
 
 
+def _response_items(res) -> list:
+    """공공데이터포털 응답에서 body.items.item 을 항상 리스트로 꺼낸다.
+
+    기상청 JSON 은 항목이 1건이면 배열이 아닌 dict 하나로, 자료가 없으면 items 를
+    빈 문자열로 주기도 한다. 구조가 깨졌거나 없으면 빈 리스트를 돌려준다.
+    """
+    body = res.get("response", {}).get("body", {}) if isinstance(res, dict) else {}
+    items = body.get("items", {}) if isinstance(body, dict) else {}
+    item = items.get("item", []) if isinstance(items, dict) else []
+    if isinstance(item, dict):
+        return [item]
+    return item if isinstance(item, list) else []
+
+
 def _airkorea_district_code(city_name: str) -> str | None:
     """주소의 시/도 부분(예: '서울특별시', '전라남도')으로 에어코리아
     district 코드를 찾는다. 접두어 매칭이라 신구 명칭(강원도/강원특별자치도,
@@ -772,8 +786,7 @@ class KMAWeatherAPI:
         code = self._extract_result_code(data)
         if code and self._check_unsubscribed("short", code):
             return "UNSUBSCRIBED"
-        items = (data or {}).get("response", {}).get("body", {}).get("items", {}).get("item", [])
-        if items:
+        if _response_items(data):
             self._mark_approved("short")
         return data
 
@@ -1576,8 +1589,7 @@ class KMAWeatherAPI:
 
         new_forecast_map = {}
         if short_res and short_res != "UNSUBSCRIBED" and "response" in short_res:
-            for it in (short_res.get("response", {}).get("body", {})
-                       .get("items", {}).get("item", [])):
+            for it in _response_items(short_res):
                 new_forecast_map.setdefault(
                     it["fcstDate"], {}
                 ).setdefault(it["fcstTime"], {})[it["category"]] = it["fcstValue"]
@@ -1600,10 +1612,8 @@ class KMAWeatherAPI:
             mid_land_res = mid_res[1] if mid_res and len(mid_res) > 1 else None
             new_tm_fc_dt = self._get_mid_base_dt(now)
 
-        new_mid_ta = (mid_ta_res.get("response", {}).get("body", {}).get("items", {}).get("item", [{}])[0]
-                      if mid_ta_res else None)
-        new_mid_land = (mid_land_res.get("response", {}).get("body", {}).get("items", {}).get("item", [{}])[0]
-                        if mid_land_res else None)
+        new_mid_ta = (_response_items(mid_ta_res) or [{}])[0] if mid_ta_res else None
+        new_mid_land = (_response_items(mid_land_res) or [{}])[0] if mid_land_res else None
 
         if new_mid_ta and new_mid_land:
             self._cache_mid_ta = new_mid_ta

@@ -1,6 +1,8 @@
-# 정상 HTTP 200 이지만 단기예보 JSON 구조가 비정상일 때 _merge_all 이 중단되지 않고 빈 예보(10칸, 기온 None)로 이어 가는가
-# 기법: 동등분할 — 구조가 깨진 위치별(빈 목록 / 키 누락 / 단건 dict / 문자열)
-# 알려진_문제: 예 — 현재 코드가 예외로 중단되는 구조 (수정 전까지 xfail(strict)로 기록, 고치면 자동으로 알려 줌)
+# 정상 HTTP 200 이지만 단기·중기예보 JSON 구조가 비정상일 때 _merge_all 이 중단되지 않고 빈 예보(10칸, 기온 None)로 이어 가는가
+# 기법: 동등분할 — 구조가 깨진 위치별(빈 목록 / 키 누락 / 단건 dict / 문자열) × 단기·중기
+# 기대_TMP: 단건 dict 는 정상 항목으로 읽혀 기온이 채워짐 (없으면 기온 None)
+# 대상: 단기(기본) = 단기예보 응답이 깨짐 / 중기 = 중기예보(기온·육상) 응답이 둘 다 깨짐
+# 기상청 JSON 은 항목이 1건이면 배열이 아닌 dict 로, 자료가 없으면 items 를 빈 문자열로 줄 수 있다
 - id: MR01
   분류: items 가 빈 배열
   응답: {response: {header: {resultCode: "00"}, body: {items: {item: []}}}}
@@ -16,10 +18,20 @@
 - id: MR05
   분류: item 이 배열이 아니라 단건 dict
   응답: {response: {header: {resultCode: "00"}, body: {items: {item: {fcstDate: "20260424", fcstTime: "1200", category: TMP, fcstValue: "22"}}}}}
-  알려진_문제: 예
-  사유: item 이 dict 하나일 때 키를 순회해 TypeError (기상청 JSON 은 항목이 1건이면 배열이 아닌 dict 로 줄 수 있음)
+  기대_TMP: "22"
 - id: MR06
   분류: items 가 빈 문자열
   응답: {response: {header: {resultCode: "00"}, body: {items: ""}}}
-  알려진_문제: 예
-  사유: items 가 문자열이면 .get 호출로 AttributeError (자료가 없을 때 items 를 빈 문자열로 주는 응답 형태)
+- id: MR07
+  대상: 중기
+  분류: 중기 item 이 빈 배열
+  응답: {response: {header: {resultCode: "00"}, body: {items: {item: []}}}}
+- id: MR08
+  대상: 중기
+  분류: 중기 item 이 배열이 아니라 단건 dict
+  응답: {response: {header: {resultCode: "00"}, body: {items: {item: {regId: "11B00000", wf4Am: "맑음"}}}}}
+- id: MR09
+  대상: 중기
+  분류: 중기 items 가 빈 문자열
+  응답: {response: {header: {resultCode: "00"}, body: {items: ""}}}
+
