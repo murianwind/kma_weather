@@ -35,8 +35,6 @@ _MOBILE_ENTITY_DOMAINS = ("device_tracker", "person")
 # 존을 벗어난 직후 오래된(존 안에서 멈춘) 데이터를 보지 않도록 한 번 갱신한다.
 _EXIT_WAIT = timedelta(minutes=5)   # 위치 흔들림 방지 대기
 _SCHEDULED_MINUTE = 15              # 정기 업데이트 시각(매시 :15)
-# pause_zones 판정을 건너뛰고 정기 업데이트와 같은 요약 갱신을 하는 이유 목록
-_SCHEDULED_REASONS = ("자동 업데이트", "존 이탈")
 
 def _is_mobile_entity(entity_id: str | None) -> bool:
     """location_entity가 device_tracker 또는 person 도메인인지 확인한다."""
@@ -668,12 +666,6 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
                     if self._in_pause_zone_state:
                         return self._cached_data or {"weather": {}, "air": {}}
 
-                # 기기 이동 여부 확인 (기존 테스트와의 호환성을 위해 외부에서 판단)
-                is_moved = (
-                    self._cached_area_lat is not None and
-                    haversine(self._cached_area_lat, self._cached_area_lon, curr_lat, curr_lon) > 2.0
-                )
-
                 nx, ny, reg_id_temp, reg_id_land, warn_area_code = self._resolve_area_codes(
                     curr_lat, curr_lon
                 )
@@ -714,30 +706,22 @@ class KMAWeatherUpdateCoordinator(DataUpdateCoordinator):
 
                 weather = new_data.setdefault("weather", {})
 
-                current_today = datetime.now(self.api.tz).date()
-                is_new_day = (self._daily_date != current_today)
-
                 if "raw_forecast" in new_data:
                     temp_changed = self._update_daily_temperatures(new_data["raw_forecast"])
 
-                    reason = getattr(self, "_update_reason", "자동 업데이트")
-                    is_scheduled = (reason in _SCHEDULED_REASONS)
-
-                    should_update_summary = is_scheduled or is_moved or is_new_day or (self._wf_pm_today is None)
-
+                    # 오늘 오전/오후 요약은 업데이트 때마다 갱신한다 (정기·수동·재시작 모두).
+                    # 12시 이후에는 이미 지난 오전 요약이 바뀌지 않도록 비어 있을 때만 채운다.
                     api_am = weather.get("wf_am_today")
                     api_pm = weather.get("wf_pm_today")
                     summary_changed = False
 
-                    if should_update_summary:
-                        now_hour = datetime.now(self.api.tz).hour
-                        if now_hour < 12:
-                            if api_am: self._wf_am_today, summary_changed = api_am, True
-                            if api_pm: self._wf_pm_today, summary_changed = api_pm, True
-                        else:
-                            if api_pm: self._wf_pm_today, summary_changed = api_pm, True
-                            if self._wf_am_today is None and api_am:
-                                self._wf_am_today, summary_changed = api_am, True
+                    if datetime.now(self.api.tz).hour < 12:
+                        if api_am: self._wf_am_today, summary_changed = api_am, True
+                        if api_pm: self._wf_pm_today, summary_changed = api_pm, True
+                    else:
+                        if api_pm: self._wf_pm_today, summary_changed = api_pm, True
+                        if self._wf_am_today is None and api_am:
+                            self._wf_am_today, summary_changed = api_am, True
 
                     if temp_changed or summary_changed:
                         await self._save_daily_temps()

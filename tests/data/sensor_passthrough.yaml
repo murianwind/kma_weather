@@ -67,3 +67,16 @@
   weather: {rain_start_time: 강수없음}
   기대: 강수없음
   기대_타입: str
+- id: SP12
+  분류: 숫자로 읽을 수 없는 값은 상태 없음(unknown) — 단위가 있는 센서
+  센서: TMP
+  weather: {TMP: "-"}
+  기대: null
+  기대_타입: NoneType
+- id: SP13
+  분류: 정수로 떨어지는 실수(25.0)는 int 로 낸다
+  센서: TMP
+  weather: {TMP: 25.0}
+  기대: 25
+  기대_타입: int
+

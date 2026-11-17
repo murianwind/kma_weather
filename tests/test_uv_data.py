@@ -74,6 +74,7 @@ def test_uv_sensor_exposure(row):
 
     if "기대_상태" in row:
         assert sensor.native_value == row["기대_상태"]
+        assert type(sensor.native_value) is type(row["기대_상태"])  # 정수 값은 int, 소수 값은 float 으로 낸다
     if "기대_속성" in row:
         assert sensor.extra_state_attributes == row["기대_속성"]
     if "기대_가용" in row:
