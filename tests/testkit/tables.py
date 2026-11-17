@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data_driven" / "cases"
 
 
 def read_csv(name):
-    """tests/data/<name> CSV 를 행 단위 딕셔너리 목록으로 읽는다 (# 로 시작하는 줄은 주석)."""
+    """tests/data_driven/cases/<name> CSV 를 행 단위 딕셔너리 목록으로 읽는다 (# 로 시작하는 줄은 주석)."""
     with open(DATA_DIR / name, encoding="utf-8", newline="") as handle:
         lines = [line for line in handle if not line.lstrip().startswith("#")]
     return list(csv.DictReader(lines))

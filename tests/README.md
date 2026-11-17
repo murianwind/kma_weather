@@ -7,8 +7,18 @@
 | 방식 | 위치 | 무엇을 보여주나 | 보는 법 |
 |---|---|---|---|
 | **BDD** (pytest-bdd, 한국어 Gherkin) | `tests/bdd/features/*.feature` + `tests/bdd/test_*_bdd.py` | 사용자 시나리오(조건/만일/그러면), 시나리오 개요 + 예 표 | `pytest tests/bdd --gherkin-terminal-reporter -v` |
-| **키워드 드리븐** | `tests/keyword/scenarios/*.yaml` + `tests/testkit/keyword_libs/` | 코드 없이 키워드를 나열한 시나리오 표, 키워드 목록 | `python tests/keyword/catalog.py` (문서: `tests/keyword/KEYWORDS.md`) |
-| **데이터 드리븐** | `tests/data/*.csv\|yaml` + `tests/test_*_data.py` | 같은 테스트 코드에 표만 바꿔 케이스 확장 | `pytest tests/test_precip_data.py tests/test_pause_zone_data.py -v` |
+| **키워드 드리븐** | `tests/keyword_driven/scenarios/*.yaml` + `tests/testkit/keyword_libs/` | 코드 없이 키워드를 나열한 시나리오 표, 키워드 목록 | `python tests/keyword_driven/catalog.py` (문서: `tests/keyword_driven/KEYWORDS.md`) |
+| **데이터 드리븐** | `tests/data_driven/cases/*.csv\|yaml` + `tests/data_driven/test_*_data.py` | 같은 테스트 코드에 표만 바꿔 케이스 확장 | `pytest tests/data_driven/test_precip_data.py tests/data_driven/test_pause_zone_data.py -v` |
+
+### 폴더 구조
+
+```
+tests/
+  bdd/            features/*.feature (시나리오) + test_*_bdd.py (단계 함수)
+  keyword_driven/ scenarios/*.yaml (키워드 나열) + KEYWORDS.md (키워드 목록) + 실행기
+  data_driven/    test_*_data.py (표를 읽는 테스트 코드) + cases/*.csv|yaml (표)
+  testkit/        세 방식이 함께 쓰는 도구 (가짜 객체, 키워드 엔진, 표 읽기, 페어와이즈 …)
+```
 
 ### Gherkin 한국어 키워드 대응표
 
@@ -42,10 +52,10 @@ pytest-bdd 는 `async def` 스텝을 **실행하지 않고** 코루틴 객체만
 ## 자주 쓰는 명령
 
 ```bash
-pytest tests/bdd tests/keyword tests/test_precip_data.py tests/test_pause_zone_data.py   # 시연 대상만
+pytest tests/bdd tests/keyword_driven tests/data_driven/test_precip_data.py tests/data_driven/test_pause_zone_data.py   # 시연 대상만
 pytest tests/bdd --collect-only -q                    # 시나리오 목록
-pytest tests/keyword --collect-only -q                # 키워드 시나리오 목록
-python tests/keyword/catalog.py --write               # 키워드 문서 갱신 (키워드 추가 후)
+pytest tests/keyword_driven --collect-only -q                # 키워드 시나리오 목록
+python tests/keyword_driven/catalog.py --write               # 키워드 문서 갱신 (키워드 추가 후)
 python tests/testkit/pairwise.py                      # 페어와이즈 표 다시 생성 (요인 변경 후)
 ```
 
