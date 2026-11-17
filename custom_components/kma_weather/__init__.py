@@ -23,7 +23,7 @@ SERVICE_GET_ASTRONOMICAL_INFO = "get_astronomical_info"
 _KST = ZoneInfo("Asia/Seoul")
 _MAX_DAYS_AHEAD = 4
 
-# time 필드: 선택 입력, HH:MM 또는 HH:MM:SS 문자열
+# time 필드: 선택 입력, HH:MM 문자열 (초는 입력할 수 없음)
 _SERVICE_SCHEMA = vol.Schema({
     vol.Required("address"): str,
     vol.Required("date"): cv.date,
