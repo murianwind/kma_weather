@@ -1,0 +1,22 @@
+# 설정 화면의 API 키 검증(_validate_api_key): 단기예보 호출 응답 → 화면에 보일 오류 키 (None = 통과)
+# 기법: 동등분할(EP) — 결과 코드 묶음(정상 / 키 오류 / 한도 초과 / 접근 거부 / 기타),  경계값분석(BVA) — 접근 거부 20·32 와 이웃 코드(19·21·31·33)
+# 응답: code:NN = resultCode NN 을 담은 200 응답,  (코드 없음) = 헤더가 비어 있는 200 응답,
+#       http:NNN = HTTP 상태 NNN 응답,  (연결 오류) = 요청 중 예외
+id,기법,분류,응답,기대
+RC01,동등분할,정상,code:00,(None)
+RC02,동등분할,등록되지 않은 키,code:30,invalid_api_key
+RC03,동등분할,유효 기간이 지난 키,code:31,invalid_api_key
+RC04,동등분할,일일 호출 한도 초과,code:22,api_quota_exceeded
+RC05,동등분할,서비스 접근 거부,code:20,api_access_denied
+RC06,동등분할,도메인 등 접근 거부,code:32,api_access_denied
+RC07,동등분할,기타 오류 코드,code:99,api_error
+RC08,동등분할,정의되지 않은 코드,code:999,api_error
+RC09,동등분할,결과 코드가 없는 응답,(코드 없음),api_error
+RC10,경계값분석,접근 거부 직전 코드 19,code:19,api_error
+RC11,경계값분석,접근 거부 직후 코드 21,code:21,api_error
+RC12,경계값분석,한도 초과 직후 코드 23,code:23,api_error
+RC13,경계값분석,키 오류 직전 코드 29,code:29,api_error
+RC14,경계값분석,유효 기간 직후 코드 33,code:33,api_error
+RC15,동등분할,HTTP 오류 상태,http:500,cannot_connect
+RC16,동등분할,HTTP 인증 실패 상태,http:401,cannot_connect
+RC17,동등분할,연결 오류,(연결 오류),cannot_connect

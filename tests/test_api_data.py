@@ -7,6 +7,7 @@
   area_resolution.csv         좌표 → 중기예보/특보 구역코드
   eligible_sensors.yaml       승인된 API → 등록되는 센서
   api_sensor_availability.yaml  센서 상태·사용 가능 여부
+  fetch_gating.csv              승인·대기 중인 API 만 조회하는 규칙
 """
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -19,7 +20,7 @@ from custom_components.kma_weather.const import API_SERVICES, WARN_TYPE_MAP
 from custom_components.kma_weather.sensor import (
     SENSOR_TYPES, KMACustomSensor, _eligible_sensor_types)
 from testkit.aio import run
-from testkit.factories import make_api
+from testkit.factories import kst, make_api
 from testkit.tables import read_csv, read_yaml, table_params
 
 coordinator_module._load_area_data()  # 구역코드 표 로드 (정적 데이터)
@@ -170,3 +171,42 @@ def test_warning_sensor_definition():
     name, unit, icon, _device_class, suffix, category = SENSOR_TYPES["warning"]
 
     assert (name, unit, icon, suffix, category) == ("기상특보", None, "mdi:alert-outline", "warning", None)
+
+
+# ── fetch_data: 승인/대기 중인 API 만 호출 ──────────────────────────────────
+def names(token):
+    return set() if token == "(없음)" else set(token.split(";"))
+
+
+@pytest.mark.parametrize("row", table_params(read_csv("fetch_gating.csv"), lambda r: r["분류"]))
+def test_fetch_data_calls_only_eligible_apis(row):
+    """
+    [Given] 승인된 API 와 승인 대기 중인 API 목록
+    [When]  fetch_data
+    [Then]  둘 중 하나에 있는 조회만 호출된다 (단기·중기·주소 조회는 항상 호출)
+    """
+    api = make_api()
+    api._approved_apis, api._pending_apis = names(row["승인"]), names(row["대기"])
+    called = set()
+
+    def stub(name, value):
+        async def call(*_args, **_kwargs):
+            called.add(name)
+            return value
+        return call
+
+    api._get_short_term = stub("short", None)
+    api._get_mid_term = stub("mid", (None, None, kst(2026, 4, 11, 6)))
+    api._get_address = stub("address", "서울시")
+    api._get_air_quality = stub("air", {})
+    api._get_warning = stub("warning", "없음")
+    api._get_pollen = stub("pollen", {})
+    api._get_uv_index = stub("uv", {})
+
+    run(api.fetch_data(lat=37.56, lon=126.98, nx=60, ny=127, reg_id_temp="11B10101",
+                       reg_id_land="11B00000", warn_area_code="L1100200",
+                       pollen_area_no="1111051500", pollen_area_name="서울",
+                       uv_area_no="1111051500", uv_area_name="서울"))
+
+    assert called - {"short", "mid", "address"} == names(row["기대_호출"])
+    assert {"short", "mid", "address"} <= called

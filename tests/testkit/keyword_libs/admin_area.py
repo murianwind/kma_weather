@@ -1,5 +1,6 @@
 """행정구역 지역코드 키워드: 꽃가루와 자외선지수가 같은 지역코드 캐시를 공유하는 흐름."""
-from unittest.mock import AsyncMock, MagicMock
+import logging
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from testkit.aio import run
 from testkit.factories import make_coordinator
@@ -32,6 +33,30 @@ def file_gone(world):
     """이미 읽어 둔 지역코드표가 사라진 상황을 만든다 (이후 읽기도 성공하지 못함)."""
     world.coord._admin_area_data = None
     world.coord._load_admin_area_map = MagicMock()
+
+
+@keyword("지역파일이_없는_채로_불러온다", library=LIB)
+def load_missing_file(world):
+    """지역코드표 파일(admin_area_map.json)이 없는 상태에서 로드를 시도한다 (경고 로그를 world.logs 에 모은다)."""
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("custom_components.kma_weather.coordinator")
+    logger.addHandler(handler)
+    try:
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            world.coord._load_admin_area_map()
+    finally:
+        logger.removeHandler(handler)
+    world.logs = records
+
+
+@keyword("지역코드표가_비어_있다", library=LIB)
+def assert_table_empty(world):
+    """로드에 실패해 지역코드표가 비어 있고(None), 로드 실패 경고가 한 번 남았는지 확인한다."""
+    assert world.coord._admin_area_data is None
+    warnings = [r for r in world.logs if r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and "행정구역코드 룩업 로드 실패" in warnings[0].getMessage()
 
 
 @keyword("꽃가루_지역을_확인한다", library=LIB)

@@ -32,6 +32,11 @@ def api_dry_warning(world):
     world.api._fetch = AsyncMock(return_value=response([DRY_WARNING]))
 
 
+@given("기상특보 API 가 결과 코드 없이 빈 항목을 돌려준다")
+def api_without_result_code(world):
+    world.api._fetch = AsyncMock(return_value={"response": {"body": {"items": {"item": []}}}})
+
+
 @given("기상특보 API 가 응답하지 못한다")
 def api_no_response(world):
     world.api._fetch = AsyncMock(return_value=None)
@@ -100,3 +105,13 @@ def not_approved(world):
 @then("ERROR 로그가 한 건 남는다")
 def one_error_log(world):
     assert len([r for r in world.caplog.records if r.levelno == logging.ERROR]) == 1
+
+
+@then(parsers.parse('기상특보 API 는 "{url}" 로 호출되었다'))
+def called_with_url(world, url):
+    assert world.api._fetch.call_args.args[0] == url
+
+
+@then("기상청 특보 현황 페이지는 조회되지 않았다")
+def page_not_queried(world):
+    world.api._fetch_page_warnings_for_area.assert_not_called()

@@ -48,11 +48,23 @@ def rain_only_at_15(world):
                              "REH": 50, "WSD": 2.0, "POP": 10})
 
 
+@given(parsers.parse('캐시된 예보에 그제 23시 기온 "{two_days_ago}", 어제 23시 기온 "{yesterday}" 가 있다'))
+def past_days_cached(world, two_days_ago, yesterday):
+    cache = {"20260409": two_days_ago, "20260410": yesterday}
+    world.api._cache_forecast_map = {
+        day: {"2300": {"TMP": temp}} for day, temp in cache.items() if temp != "-"}
+
+
 # ── 만일 (When) ──────────────────────────────────────────────────────────────
 @when("예보를 병합한다")
 @when("오후 3시에 예보를 병합한다")
 def merge(world):
     world.result = world.api._merge_all(world.now, world.short, world.mid, {})
+
+
+@when("새 예보를 받지 못하고 병합한다")
+def merge_without_new_forecast(world):
+    world.result = world.api._merge_all(world.now, {}, {}, {})
 
 
 # ── 그러면 (Then) ────────────────────────────────────────────────────────────
@@ -87,3 +99,8 @@ def current_condition(world, condition):
 @then(parsers.parse('오늘 오후 요약 날씨는 "{condition}"이 아니다'))
 def afternoon_summary_differs(world, condition):
     assert world.result["weather"]["wf_pm_today"] != condition
+
+
+@then(parsers.parse('현재 기온은 "{temp}" 이다'))
+def current_temperature(world, temp):
+    assert str(world.result["weather"]["TMP"]) == temp

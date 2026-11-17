@@ -7,6 +7,9 @@
   current_slot_selection.csv    현재 날씨가 어느 단기예보 슬롯에서 오는가
   sensor_passthrough.yaml       센서가 원본값의 형(int/float/str)을 유지하는가
   condition_sync_entities.csv   현재 날씨가 센서·날씨 엔티티에 같은 값으로 나타나는가
+  short_base_time.csv           단기예보 발표 회차(base_date/base_time) 결정 — 발표 +10분 경계
+  short_term_response.csv       단기예보 호출 결과 → 반환값 / 승인 표시
+  mid_condition_text.csv        중기예보 날씨 문구 → 표준 한글 날씨 상태 (포함 단어 우선순위)
 """
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -18,6 +21,7 @@ from custom_components.kma_weather.api_kma import KMAWeatherAPI, KOR_TO_CONDITIO
 from custom_components.kma_weather.const import DOMAIN
 from custom_components.kma_weather.coordinator import KMAWeatherUpdateCoordinator
 from custom_components.kma_weather.sensor import KMACustomSensor
+from testkit.aio import run
 from testkit.factories import KST, kst
 from testkit.forecasts import (
     daily_entry, make_api, mid_response, short_four_slots, twice_daily_entry)
@@ -215,3 +219,79 @@ async def test_condition_is_synced_between_sensor_and_weather_entity(hass, row):
             "weather", "get_forecasts", {"type": "twice_daily"},
             target={"entity_id": "weather.sync_weather"}, blocking=True, return_response=True)
         assert response["weather.sync_weather"]["forecast"][0]["condition"] == row["영문"]
+
+
+# ── 중기예보 날씨 문구 ───────────────────────────────────────────────────────
+@pytest.mark.parametrize("row", table_params(read_csv("mid_condition_text.csv"), lambda r: f"{r['분류']}[{r['입력']}]"))
+def test_translate_mid_condition_text(row):
+    """
+    [Given] 중기예보가 돌려준 날씨 문구 (표준 문구 / 단어 포함 / 알 수 없는 문구 / 없음)
+    [When]  _translate_mid_condition_kor
+    [Then]  표준 한글 날씨 상태 (둘 이상 포함하면 앞선 규칙)
+    """
+    api = make_api()
+
+    assert api._translate_mid_condition_kor(token(row["입력"])) == row["기대"]
+
+
+# ── 단기예보 발표 회차와 호출 결과 ───────────────────────────────────────────
+def short_term_api(body):
+    """_fetch 가 항상 body 를 돌려주는 API. 호출 인자는 api.sent 에 쌓인다."""
+    api = make_api()
+    api.nx, api.ny = 60, 127
+    api.sent = []
+
+    async def fetch(url, params, *args, **kwargs):
+        api.sent.append(params)
+        return body
+
+    api._fetch = fetch
+    return api
+
+
+@pytest.mark.parametrize("row", table_params(read_csv("short_base_time.csv"), lambda r: r["분류"]))
+def test_short_term_base_time(row):
+    """
+    [Given] 현재 시각 (회차 전환 직전·직후, 자정 전후)
+    [When]  _get_short_term
+    [Then]  요청의 base_date / base_time 이 표의 회차이다 (발표 10분 뒤부터 새 회차)
+    """
+    api = short_term_api({})
+    hour, minute = map(int, row["현재"].split(":"))
+
+    run(api._get_short_term(kst(2026, 4, 11, hour, minute)))
+
+    expected_date = (datetime(2026, 4, 11) + timedelta(days=int(row["기대_날짜"]))).strftime("%Y%m%d")
+    assert (api.sent[0]["base_date"], api.sent[0]["base_time"]) == (expected_date, row["기대_시각"])
+    assert (api.sent[0]["nx"], api.sent[0]["ny"]) == (60, 127)
+
+
+RESPONSE_BODIES = {
+    "정상": {"response": {"header": {"resultCode": "00"}, "body": {"items": {"item": [{"category": "TMP"}]}}}},
+    "항목없음": {"response": {"header": {"resultCode": "00"}, "body": {"items": {"item": []}}}},
+    "(None)": None,
+}
+
+
+def short_term_body(token):
+    if token in RESPONSE_BODIES:
+        return RESPONSE_BODIES[token]
+    kind, value = token.split(":")
+    return {"response": {"header": {"resultCode": value}}} if kind == "code" else {"_http_error": value}
+
+
+@pytest.mark.parametrize("row", table_params(read_csv("short_term_response.csv"), lambda r: r["분류"]))
+def test_short_term_response_handling(row):
+    """
+    [Given] 단기예보 호출이 정상 / 항목 없음 / 응답 없음 / 미신청 / HTTP 오류를 돌려줌
+    [When]  _get_short_term
+    [Then]  반환값과 '단기예보 승인' 표시가 표와 같다
+    """
+    body = short_term_body(row["응답"])
+    api = short_term_api(body)
+
+    result = run(api._get_short_term(kst(2026, 4, 11, 10, 30)))
+
+    expected = {"응답 그대로": body, "(None)": None, "UNSUBSCRIBED": "UNSUBSCRIBED"}[row["기대_반환"]]
+    assert result == expected
+    assert ("short" in api._approved_apis) == (row["기대_승인"] == "예")
