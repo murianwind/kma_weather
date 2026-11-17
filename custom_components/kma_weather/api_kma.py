@@ -754,9 +754,9 @@ class KMAWeatherAPI:
         adj = now - timedelta(minutes=10)
         hour = adj.hour
 
-        if hour >= 23 or hour < 2:
+        if hour < 2:
             base_h = 20
-            base_d = (adj - timedelta(days=1)).strftime("%Y%m%d") if hour < 2 else adj.strftime("%Y%m%d")
+            base_d = (adj - timedelta(days=1)).strftime("%Y%m%d")
         else:
             base_h = max(h for h in [2, 5, 8, 11, 14, 17, 20] if h <= hour)
             base_d = adj.strftime("%Y%m%d")
