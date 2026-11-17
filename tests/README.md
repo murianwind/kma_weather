@@ -1,6 +1,6 @@
 # 테스트 시연 가이드
 
-도메인별로 **세 가지 방식**을 보여줍니다 (현재: 강수량, 일시정지 존 pause_zones, 자외선지수, 에어코리아/지역코드).
+도메인별로 **세 가지 방식**을 보여줍니다 (현재: 강수량, 일시정지 존 pause_zones, 자외선지수, 에어코리아/지역코드, 기상특보·API 미신청/중지·구역코드).
 한 테스트는 성격에 맞는 한 가지 방식으로만 작성해 중복을 피합니다 — 시나리오(BDD) / 긴 호출·실패 흐름(키워드) / 입력→출력 규칙(데이터).
 커버리지 측정(`--cov-branch`, Codecov)과 CI 요약은 기존 그대로 동작합니다.
 
@@ -10,12 +10,26 @@
 | **키워드 드리븐** | `tests/keyword/scenarios/*.yaml` + `tests/testkit/keyword_libs/` | 코드 없이 키워드를 나열한 시나리오 표, 키워드 목록 | `python tests/keyword/catalog.py` (문서: `tests/keyword/KEYWORDS.md`) |
 | **데이터 드리븐** | `tests/data/*.csv\|yaml` + `tests/test_*_data.py` | 같은 테스트 코드에 표만 바꿔 케이스 확장 | `pytest tests/test_precip_data.py tests/test_pause_zone_data.py -v` |
 
+### Gherkin 한국어 키워드 대응표
+
+`.feature` 첫 줄 `# language: ko` 는 Gherkin 공식 한국어 사전을 쓴다는 선언이며, 이 사전이 인식하는 키워드만 쓸 수 있습니다.
+각 `.feature` 파일 상단에도 같은 대응표가 주석으로 들어 있습니다.
+
+| 한국어 | English |
+|---|---|
+| 기능 | Feature |
+| 시나리오 / 시나리오 개요 / 예 | Scenario / Scenario Outline / Examples |
+| 조건 (먼저) | Given |
+| 만일 (만약) | When |
+| 그러면 | Then |
+| 그리고 / 하지만 (단) | And / But |
+
 ## 테스트 설계 기법 → 표/시나리오 대응
 
 | 기법 | 적용 위치 |
 |---|---|
-| 동등분할 | `precip_amount.csv`(EP*), `pause_zone_polling.csv`, `pause_zone_visibility.csv`, `pause_zone_options.csv`, `precip_sensor_exposure.yaml`, `uv_grade.csv`(EP*), `uv_base_time.csv`(EP*), `uv_sensor_exposure.yaml`, `airkorea_fetch_retry.csv`(오류 종류별) |
-| 경계값분석 | `precip_amount.csv`(BV*), `pause_zone_radius.csv`(반경 ±0.1m, 기본 반경), `pause_zone_exit.feature`(판정 분 14/15, 0/59, 성공 시각 = 이탈 시각), `precip_hourly.feature`(00:05 … 23:30), `uv_grade.csv`(BV*: 2.9/3, 5.9/6 …), `uv_base_time.csv`(BV*: 02:59/03:00), `uv_query.feature`(발표 시각 02:59/03:00), `airkorea_fetch_retry.csv`(시도 한도 2회) |
+| 동등분할 | `precip_amount.csv`(EP*), `pause_zone_polling.csv`, `pause_zone_visibility.csv`, `pause_zone_options.csv`, `precip_sensor_exposure.yaml`, `uv_grade.csv`(EP*), `uv_base_time.csv`(EP*), `uv_sensor_exposure.yaml`, `airkorea_fetch_retry.csv`(오류 종류별), `warning_items.yaml`(발표/연장/정정/해제/취소/경보 수준), `warn_type_map.csv`(열대야 포함 전 종류), `unsubscribed_codes.csv`, `area_resolution.csv`, `eligible_sensors.yaml`, `api_sensor_availability.yaml` |
+| 경계값분석 | `precip_amount.csv`(BV*), `pause_zone_radius.csv`(반경 ±0.1m, 기본 반경), `pause_zone_exit.feature`(판정 분 14/15, 0/59, 성공 시각 = 이탈 시각), `precip_hourly.feature`(00:05 … 23:30), `uv_grade.csv`(BV*: 2.9/3, 5.9/6 …), `uv_base_time.csv`(BV*: 02:59/03:00), `uv_query.feature`(발표 시각 02:59/03:00), `airkorea_fetch_retry.csv`(시도 한도 2회), `unsubscribed_codes.csv`(미신청 코드 19/20, 22/23, 29/30, 33/34), `warning_items.yaml`(같은 특보의 발표 시각 최신 기준), `area_code_cache.yaml`(구역 캐시 2km 바로 안/밖 1.9km·2.1km) |
 | 페어와이즈 | `precip_pairwise.csv` — 96조합을 16개로 (`python tests/testkit/pairwise.py` 로 생성, 쌍 커버 여부는 테스트가 검증) |
 | 상태 전이 | `pause_zone_commute.yaml`(집 안 → 이탈 → 대기 → 판정), `pause_zone_lifecycle.feature`, `airkorea_air_quality.yaml`(캐시 → 이동 → 실패 → 보완) |
 

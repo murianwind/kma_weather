@@ -9,13 +9,14 @@ from custom_components.kma_weather.api_kma import KMAWeatherAPI
 LIB = "airkorea (에어코리아 대기질)"
 NEARBY, AIR = "getNearbyMsrstnList", "getMsrstnAcctoRltmMesureDnsty"
 STATION_OK = {"response": {"header": {"resultCode": "00"}, "body": {"items": [{"stationName": "화랑로"}]}}}
+STATION_GANGNAM = {"response": {"header": {"resultCode": "00"}, "body": {"items": [{"stationName": "강남"}]}}}
 AIR_OK = {"response": {"header": {"resultCode": "00"}, "body": {"items": [
     {"pm10Value": "23", "pm25Value": "16", "o3Value": "0.008"}]}}}
 AIR_EMPTY = {"response": {"header": {"resultCode": "00"}, "body": {"items": []}}}
 UNSUBSCRIBED = {"response": {"header": {"resultCode": "30"}}}
 PAGE_OK = {"pm10Value": "30", "pm25Value": "12", "o3Value": "0.020"}
 # 키워드 인자 '결과' 의 이름 → 가짜 API 응답
-STATION_RESPONSES = {"정상": STATION_OK, "실패": None, "미신청": UNSUBSCRIBED}
+STATION_RESPONSES = {"정상": STATION_OK, "강남": STATION_GANGNAM, "실패": None, "미신청": UNSUBSCRIBED}
 AIR_RESPONSES = {"정상": AIR_OK, "비어있음": AIR_EMPTY, "실패": None}
 
 
@@ -41,7 +42,7 @@ def prepare(world):
 
 @keyword("측정소_조회가_응답한다", library=LIB)
 def station_lookup(world, 결과):
-    """측정소 조회 API 의 응답을 정한다: 정상 / 실패 / 미신청."""
+    """측정소 조회 API 의 응답을 정한다: 정상(화랑로) / 강남(강남 측정소) / 실패 / 미신청."""
     world.routes[NEARBY] = STATION_RESPONSES[결과]
 
 

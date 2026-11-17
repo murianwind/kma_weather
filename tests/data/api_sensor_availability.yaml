@@ -1,0 +1,39 @@
+# 기상특보/꽃가루/기온 센서의 상태(native_value)와 사용 가능 여부(available) — API 승인 여부와 데이터에 따라 달라진다
+# 기법: 동등분할 — 데이터 없음(None, API 중지) / 값 있음 / 승인 안 됨
+# data: 코디네이터 데이터, approved: 승인된 API 키 목록, 센서: 센서 종류
+- id: SA01
+  분류: 꽃가루 데이터가 None 이면(API 중지) 사용 불가
+  센서: pollen
+  data: {weather: {}, air: {}, pollen: null}
+  approved: [pollen]
+  기대_가용: false
+- id: SA02
+  분류: 단기예보 API 가 승인되지 않으면 기온 센서 사용 불가
+  센서: TMP
+  data: {weather: {}, air: {}, pollen: null}
+  approved: []
+  기대_가용: false
+- id: SA03
+  분류: 기상특보가 None 이면(미신청·조회 실패) 사용 불가
+  센서: warning
+  data: {weather: {warning: null}, air: {}}
+  approved: [warning]
+  기대_가용: false
+- id: SA04
+  분류: 기상특보가 '특보없음'이어도 값이 있으므로 사용 가능
+  센서: warning
+  data: {weather: {warning: 특보없음}, air: {}}
+  approved: [warning]
+  기대_가용: true
+- id: SA05
+  분류: 활성 특보 이름이 그대로 상태가 됨
+  센서: warning
+  data: {weather: {warning: 건조주의보}, air: {}}
+  approved: [warning]
+  기대_상태: 건조주의보
+- id: SA06
+  분류: "'없음' 문자열도 그대로 상태가 됨"
+  센서: warning
+  data: {weather: {warning: 없음}, air: {}}
+  approved: [warning]
+  기대_상태: 없음

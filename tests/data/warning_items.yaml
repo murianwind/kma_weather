@@ -1,0 +1,95 @@
+# _get_warning: API 가 돌려준 특보 항목(items) → 센서에 표시되는 특보 문자열
+# 기법: 동등분할(EP) — command/cancel/endTime/warnStress 종류별 대표 항목,
+#       경계값분석(BVA) — 같은 종류의 특보가 여러 번 발표됐을 때 발표 시각(tmFc)이 최신인 것이 기준
+# 항목 필드: command(1 발표·3 연장·6 정정·7 변경발표 = 유효, 2 해제·8 변경해제 = 제외) / cancel(0 이어야 유효) /
+#           endTime(0 이어야 유효, 종료 시각이 있으면 이미 끝난 특보) / warnVar(특보 종류) / warnStress(0 주의보·1 경보·2 중대경보) / tmFc(발표 시각)
+- id: WI01
+  분류: 신규 발표된 건조주의보
+  항목: [{command: "1", cancel: "0", endTime: "0", warnVar: "4", warnStress: "0"}]
+  기대: 건조주의보
+- id: WI02
+  분류: 연장(command 3)도 유효한 특보
+  항목: [{command: "3", cancel: "0", endTime: "0", warnVar: "4", warnStress: "0"}]
+  기대: 건조주의보
+- id: WI03
+  분류: 정정(command 6)도 유효한 특보
+  항목: [{command: "6", cancel: "0", endTime: "0", warnVar: "2", warnStress: "0"}]
+  기대: 호우주의보
+- id: WI04
+  분류: 변경발표(command 7)도 유효한 특보
+  항목: [{command: "7", cancel: "0", endTime: "0", warnVar: "2", warnStress: "1"}]
+  기대: 호우경보
+- id: WI05
+  분류: 해제(command 2)는 제외
+  항목: [{command: "2", cancel: "0", endTime: "202604171700", warnVar: "4", warnStress: "0"}]
+  기대: 특보없음
+- id: WI06
+  분류: 변경해제(command 8)는 제외
+  항목: [{command: "8", cancel: "0", endTime: "0", warnVar: "4", warnStress: "0"}]
+  기대: 특보없음
+- id: WI07
+  분류: 취소(cancel=1)된 특보는 제외
+  항목: [{command: "1", cancel: "1", endTime: "0", warnVar: "4", warnStress: "0"}]
+  기대: 특보없음
+- id: WI08
+  분류: 종료 시각이 있는 특보는 제외
+  항목: [{command: "1", cancel: "0", endTime: "202604171700", warnVar: "4", warnStress: "0"}]
+  기대: 특보없음
+- id: WI09
+  분류: 경보 수준(warnStress=1)은 경보로 표시 (대설)
+  항목: [{command: "1", cancel: "0", endTime: "0", warnVar: "8", warnStress: "1"}]
+  기대: 대설경보
+- id: WI10
+  분류: 폭염 중대경보(warnStress=2)
+  항목: [{command: "1", cancel: "0", endTime: "0", warnVar: "12", warnStress: "2"}]
+  기대: 폭염중대경보
+- id: WI11
+  분류: 열대야주의보(warnVar=13) — 매핑 누락으로 무시되던 사례(제주시동부)
+  항목: [{command: "1", cancel: "0", endTime: 0, tmFc: 202607091620, warnVar: 13, warnStress: 0}]
+  기대: 열대야주의보
+- id: WI12
+  분류: 열대야경보(warnStress=1)
+  항목: [{command: "1", cancel: "0", endTime: 0, tmFc: 202607091620, warnVar: 13, warnStress: 1}]
+  기대: 열대야경보
+- id: WI13
+  분류: 해제된 열대야특보는 제외(칠곡군 사례)
+  항목: [{command: "2", cancel: "0", endTime: 202607091620, tmFc: 202607091620, warnVar: 13, warnStress: 0}]
+  기대: 특보없음
+- id: WI14
+  분류: 서로 다른 종류가 동시에 유효하면 쉼표로 함께 표시 (건조 + 호우)
+  항목:
+    - {command: "1", cancel: "0", endTime: "0", warnVar: "4", warnStress: "0"}
+    - {command: "1", cancel: "0", endTime: "0", warnVar: "2", warnStress: "0"}
+  기대: 건조주의보, 호우주의보
+- id: WI15
+  분류: 열대야 + 호우 동시 발효
+  항목:
+    - {command: "1", cancel: "0", endTime: 0, tmFc: 202607091620, warnVar: 13, warnStress: 0}
+    - {command: "1", cancel: "0", endTime: 0, tmFc: 202607091620, warnVar: 2, warnStress: 0}
+  기대: 열대야주의보, 호우주의보
+- id: WI16
+  분류: 같은 종류가 여러 번 발표되면 최신 발표(tmFc) 기준 - 나중에 해제됨
+  항목:
+    - {command: "1", cancel: "0", endTime: "0", warnVar: "4", warnStress: "0", tmFc: 202604161000}
+    - {command: "2", cancel: "0", endTime: "202604171700", warnVar: "4", warnStress: "0", tmFc: 202604171700}
+  기대: 특보없음
+- id: WI17
+  분류: 같은 종류가 여러 번 발표되면 최신 발표(tmFc) 기준 - 해제 후 다시 발표됨
+  항목:
+    - {command: "2", cancel: "0", endTime: "202604161700", warnVar: "4", warnStress: "0", tmFc: 202604161700}
+    - {command: "1", cancel: "0", endTime: "0", warnVar: "4", warnStress: "0", tmFc: 202604171000}
+  기대: 건조주의보
+- id: WI18
+  분류: 주의보가 경보로 격상되면 최신 항목(경보)만 표시
+  항목:
+    - {command: "1", cancel: "0", endTime: "0", warnVar: "2", warnStress: "0", tmFc: 202604161000}
+    - {command: "7", cancel: "0", endTime: "0", warnVar: "2", warnStress: "1", tmFc: 202604161500}
+  기대: 호우경보
+- id: WI19
+  분류: 알 수 없는 특보 종류 코드는 무시
+  항목: [{command: "1", cancel: "0", endTime: "0", warnVar: "99", warnStress: "0"}]
+  기대: 특보없음
+- id: WI20
+  분류: 항목이 없으면 특보없음
+  항목: []
+  기대: 특보없음
