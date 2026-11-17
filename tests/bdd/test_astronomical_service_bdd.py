@@ -70,6 +70,7 @@ def integration_without_short(hass, mock_config_entry, world):
                new_callable=AsyncMock, return_value=NO_SHORT):
         world["coordinator"] = setup_entry(hass, mock_config_entry)
     world["lat"], world["lon"] = 37.56, 126.98
+    world["fetch_patch"] = patch.object(world["coordinator"].api, "_fetch", new_callable=AsyncMock)
 
 
 def approve_short(world, response=None, error=None):
@@ -102,7 +103,8 @@ def calculate(hass, world, eval_dt=None, target_date=None):
             lat=world["lat"], lon=world["lon"], target_date=target_date or today_kst(), eval_dt=eval_dt)
     fetch_patch = world.get("fetch_patch")
     if fetch_patch:
-        with fetch_patch:
+        with fetch_patch as spy:
+            world["fetch_spy"] = spy
             world["result"] = run_on(hass, go())
     else:
         world["result"] = run_on(hass, go())
@@ -180,3 +182,8 @@ def moon_times(world, phase, rise, sets):
             assert re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value), f"{key}={value!r}"
         else:
             assert value is None, f"{key}={value!r}"
+
+
+@then("단기예보는 조회하지 않았다")
+def short_not_queried(world):
+    assert world["fetch_spy"].await_count == 0

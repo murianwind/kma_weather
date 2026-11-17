@@ -86,7 +86,8 @@ def test_observation_condition(row):
     wind = None if row["풍속"] == NONE else (float(row["풍속"]) if row["풍속"] != "abc" else "abc")
     weather = {"current_condition": row["날씨"], "current_condition_kor": CONDITION_KOR[row["날씨"]],
                "moon_illumination": illum, "moon_phase": "보름달", "WSD": wind}
-    now = datetime(*DAY, int(row["시각"]), 0, tzinfo=TZ)
+    hour, _, minute = row["시각"].partition(":")
+    now = datetime(*DAY, int(hour), int(minute or 0), tzinfo=TZ)
 
     condition, attrs = KMAWeatherUpdateCoordinator._eval_observation(make_coord(), weather, now, LAT, LON)
 
