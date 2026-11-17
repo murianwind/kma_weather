@@ -1,0 +1,18 @@
+# 승인된 API 에 따라 등록되는 센서 종류 (sensor._eligible_sensor_types)
+# 기법: 동등분할 — 아무것도 승인 안 됨(상시 센서만) / 여러 API 승인 / 하나만 승인
+# 포함·제외는 해당 센서 종류가 목록에 있어야/없어야 한다는 뜻
+- id: ES01
+  분류: 승인된 API 가 없으면 상시 센서만 등록
+  approved: []
+  포함: [api_calls_today, sunrise]
+  제외: [TMP, pm10Value, warning, pollen]
+- id: ES02
+  분류: short·air·warning·pollen 이 승인되면 해당 센서가 등록
+  approved: [short, air, warning, pollen]
+  포함: [TMP, pm10Value, warning, pollen, api_calls_today]
+  제외: []
+- id: ES03
+  분류: pollen 만 승인되면 꽃가루 센서만 추가
+  approved: [pollen]
+  포함: [pollen, api_calls_today]
+  제외: [TMP, warning, pm10Value]

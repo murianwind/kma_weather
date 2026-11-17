@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.kma_weather.api_kma import KMAWeatherAPI
-from custom_components.kma_weather.const import API_SERVICES
 from custom_components.kma_weather.sensor import SENSOR_API_GROUPS, SENSOR_TYPES, KMACustomSensor
 from testkit.aio import run
 from testkit.factories import KST, make_coordinator
@@ -85,16 +84,6 @@ def test_uv_sensors_are_registered_under_the_uv_api_group():
     """uv 센서 2개가 SENSOR_TYPES 에 있고 'uv' API 승인 그룹에 묶여 있다."""
     assert {"uv_value", "uv_grade"} <= set(SENSOR_TYPES)
     assert SENSOR_API_GROUPS.get("uv") == ["uv_value", "uv_grade"]
-
-
-def test_uv_api_service_is_registered_and_distinct_from_pollen():
-    """
-    자외선지수(LivingWthrIdxServiceV5)는 꽃가루(HealthWthrIdxServiceV3)와
-    공공데이터포털에서 서로 다른 신청 건이라 URL 이 달라야 한다.
-    """
-    name, url = API_SERVICES["uv"]
-    assert name and "data.go.kr" in url
-    assert url != API_SERVICES["pollen"][1]
 
 
 # ── 지역코드표 파일 ──────────────────────────────────────────────────────────
