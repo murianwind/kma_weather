@@ -6,7 +6,7 @@
   safe_float.csv            문자열 → 숫자 변환
   land_codes.csv            기온 구역 → 육상 구역 코드
   geo_distance.csv          두 좌표 사이 거리
-  malformed_short_response.yaml  비정상 구조의 단기예보 응답 (알려진 문제는 xfail)
+  malformed_short_response.yaml  비정상 구조의 단기·중기예보 응답
 """
 from unittest.mock import MagicMock
 
@@ -112,24 +112,22 @@ def test_every_mid_term_area_resolves_to_itself():
 
 
 # ── 비정상 구조의 단기예보 응답 ──────────────────────────────────────────────
-def malformed_params():
-    params = []
-    for row in read_yaml("malformed_short_response.yaml"):
-        marks = [pytest.mark.xfail(strict=True, reason=row["사유"])] if row.get("알려진_문제") == "예" else []
-        params.append(pytest.param(row, id=f"{row['id']}-{row['분류']}", marks=marks))
-    return params
-
-
-@pytest.mark.parametrize("row", malformed_params())
+@pytest.mark.parametrize(
+    "row", table_params(read_yaml("malformed_short_response.yaml"), lambda r: r["분류"]))
 def test_malformed_short_response_does_not_stop_the_merge(row):
     """
     [Given] HTTP 200 이지만 JSON 구조가 비정상인 단기예보 응답
     [When]  _merge_all
-    [Then]  예외 없이 이어지고 일 예보는 10칸, 기온은 비어 있다 (알려진 문제는 현재 실패가 정상 → xfail)
+    [Then]  예외 없이 이어지고 일 예보는 10칸, 기온은 비어 있다 (단건 dict 는 정상 항목으로 읽혀 기온이 채워짐)
     """
-    result = make_api()._merge_all(kst(2026, 4, 24, 12), row["응답"], None, {})
+    now = kst(2026, 4, 24, 12)
+    api = make_api()
+    if row.get("대상") == "중기":
+        result = api._merge_all(now, None, (row["응답"], row["응답"], api._get_mid_base_dt(now)), {})
+    else:
+        result = api._merge_all(now, row["응답"], None, {})
 
-    assert result["weather"]["TMP"] is None
+    assert result["weather"]["TMP"] == row.get("기대_TMP")
     assert len(result["weather"]["forecast_daily"]) == 10
 
 
