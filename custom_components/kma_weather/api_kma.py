@@ -529,14 +529,16 @@ class KMAWeatherAPI:
                 headers={"User-Agent": self._nominatim_user_agent, "Accept-Language": "ko"},
                 timeout=5,
             )
-            if d:
+            if d and "_http_error" not in d:
                 a = d.get("address", {})
                 parts = [
                     a.get("city", a.get("province", "")),
                     a.get("borough", a.get("county", "")),
                     a.get("suburb", a.get("village", "")),
                 ]
-                return " ".join([p for p in parts if p]).strip()
+                address = " ".join([p for p in parts if p]).strip()
+                if address:
+                    return address
         except Exception as e:
             _LOGGER.debug("주소 역지오코딩 실패 (좌표로 대체): %s", self._mask_key(e))
         return f"{lat:.4f}, {lon:.4f}"

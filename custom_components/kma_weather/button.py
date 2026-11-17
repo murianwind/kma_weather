@@ -28,12 +28,12 @@ class KMAUpdateButton(CoordinatorEntity, ButtonEntity):
         self._last_press = None
 
     async def async_press(self) -> None:
-        # 버튼 클릭 시 호출 이유를 "업데이트 액션"으로 설정
-        self.coordinator._update_reason = "업데이트 액션"
         now = datetime.now()
         # 로그 메시지 이름 변경 반영
         if self._last_press and (now - self._last_press) < timedelta(seconds=5):
             _LOGGER.info("업데이트가 너무 자주 요청되었습니다. (5초 제한)")
             return
         self._last_press = now
+        # 실제로 갱신을 요청할 때만 호출 이유를 "업데이트 액션"으로 설정 (무시된 연타는 이유를 바꾸지 않는다)
+        self.coordinator._update_reason = "업데이트 액션"
         await self.coordinator.async_request_refresh()
