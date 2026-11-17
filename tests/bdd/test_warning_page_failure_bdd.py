@@ -1,5 +1,5 @@
 """BDD: 특보 보완 페이지 조회 실패 알림 — features/warning_page_failure.feature
-병합 규칙은 tests/test_warning_page_data.py 의 warning_page_merge.csv 표가 다룬다."""
+병합 규칙은 tests/data_driven/test_warning_page_data.py 의 warning_page_merge.csv 표가 다룬다."""
 import logging
 from unittest.mock import AsyncMock, MagicMock
 

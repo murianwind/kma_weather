@@ -1,5 +1,5 @@
 """BDD: 미신청 API 처리 — features/api_unsubscribed.feature
-resultCode 별 미신청 판정 경계는 tests/test_api_data.py 의 unsubscribed_codes.csv 표가 다룬다."""
+resultCode 별 미신청 판정 경계는 tests/data_driven/test_api_data.py 의 unsubscribed_codes.csv 표가 다룬다."""
 import logging
 from unittest.mock import AsyncMock, MagicMock
 

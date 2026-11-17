@@ -1,7 +1,7 @@
 """페어와이즈(2-way) 조합 표 생성기.
 
 요인이 4개(4×4×3×2 = 96조합)여도 '모든 값 쌍'이 한 번 이상 등장하는 조합만 골라 케이스를 줄인다.
-결과는 tests/data/precip_pairwise.csv 로 커밋되어 시연에서 표 그대로 볼 수 있다.
+결과는 tests/data_driven/cases/precip_pairwise.csv 로 커밋되어 시연에서 표 그대로 볼 수 있다.
 
     python tests/testkit/pairwise.py          # CSV 다시 생성
 """
@@ -30,7 +30,7 @@ HOURLY = {"없음": "0", "미만": "~1"}
 COLUMNS = ["id", "pty", "형식", "현재시각", "예보일수", "원본값",
            "기대_상태", "기대_표기", "확인_키", "기대_속성값"]
 
-CSV_PATH = Path(__file__).resolve().parent.parent / "data" / "precip_pairwise.csv"
+CSV_PATH = Path(__file__).resolve().parent.parent / "data_driven" / "cases" / "precip_pairwise.csv"
 HEADER = (
     "# 페어와이즈: PTY × 원본값 형식 × 현재시각 × 예보일수 의 모든 값 쌍을 커버하는 최소 조합\n"
     "# 생성: python tests/testkit/pairwise.py  (손으로 고치지 말고 요인을 바꾼 뒤 다시 생성)\n"

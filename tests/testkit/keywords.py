@@ -2,7 +2,7 @@
 
   - 키워드: 한국어 이름이 붙은 파이썬 함수 (@keyword 로 등록, docstring 이 설명)
   - 시나리오: YAML 에 키워드를 순서대로 나열한 표 (코드 없이 읽고 고칠 수 있음)
-  - 카탈로그: 등록된 키워드의 이름·인자·설명을 표로 출력 (tests/keyword/KEYWORDS.md)
+  - 카탈로그: 등록된 키워드의 이름·인자·설명을 표로 출력 (tests/keyword_driven/KEYWORDS.md)
 
 YAML 시나리오 형식:
 
@@ -70,7 +70,7 @@ class KeywordRegistry:
 
     def catalog_markdown(self):
         lines = ["# 키워드 목록", "",
-                 "`python tests/keyword/catalog.py --write` 로 생성한 문서입니다. "
+                 "`python tests/keyword_driven/catalog.py --write` 로 생성한 문서입니다. "
                  "키워드를 추가하면 이 파일도 다시 생성하세요 (일치 여부는 테스트가 확인합니다).", ""]
         library = None
         for kw in self.all():

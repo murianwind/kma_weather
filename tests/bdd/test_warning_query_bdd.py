@@ -1,5 +1,5 @@
 """BDD: 기상특보 조회(_get_warning) — features/warning_query.feature
-항목 해석 규칙(발표/연장/해제/경보 수준)은 tests/test_api_data.py 의 warning_items.yaml 표가 다룬다."""
+항목 해석 규칙(발표/연장/해제/경보 수준)은 tests/data_driven/test_api_data.py 의 warning_items.yaml 표가 다룬다."""
 import logging
 from unittest.mock import AsyncMock
 

@@ -6,7 +6,7 @@
 기능: 미신청 API 처리
   공공데이터포털에서 활용신청하지 않았거나 접근이 거부된 API 는 resultCode(20~22, 30~33)로 알려 옵니다.
   이때 서비스별로 약속된 "조회 불가" 결과를 돌려주고, 사용자에게는 신청 안내 알림을 한 번만 보냅니다.
-  (resultCode 별 판정 경계는 데이터 표 tests/data/unsubscribed_codes.csv 에서 확인합니다.)
+  (resultCode 별 판정 경계는 데이터 표 tests/data_driven/cases/unsubscribed_codes.csv 에서 확인합니다.)
 
   시나리오 개요: 서비스마다 미신청 응답에 대한 조회 불가 결과가 정해져 있다
     조건 API 서비스가 미신청 응답(resultCode 33)을 준다
