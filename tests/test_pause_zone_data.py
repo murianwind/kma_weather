@@ -119,7 +119,8 @@ async def test_pause_zones_option_visibility(hass, row):
     [Then]  모바일 기기(device_tracker/person)에만 pause_zones 항목이 보인다
     """
     stored = {} if row["저장된_pause_zones"] == "(없음)" else {"pause_zones": zone_list(row["저장된_pause_zones"])}
-    entry = _entry(row["위치_엔티티"], {"location_entity": row["위치_엔티티"], **stored})
+    location = "" if row["위치_엔티티"] == "(없음)" else row["위치_엔티티"]
+    entry = _entry(location, {"location_entity": location, **stored})
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
