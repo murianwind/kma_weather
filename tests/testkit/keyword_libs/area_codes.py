@@ -1,8 +1,11 @@
 """구역코드 키워드: 좌표 → (격자 nx, ny, 중기예보 기온/육상 구역, 특보 구역) 결정과 2km 캐시."""
+from datetime import datetime, timezone
+
 import pytest
+from freezegun import freeze_time
 
 from custom_components.kma_weather import coordinator as coordinator_module
-from testkit.factories import make_coordinator
+from testkit.factories import KST, make_coordinator
 from testkit.keywords import keyword
 
 LIB = "area_codes (구역코드 결정·캐시)"
@@ -59,3 +62,23 @@ def assert_warn_area_changed(world):
 def assert_cached_lat(world, 위도):
     """캐시에 기억된 기준 위도가 기대와 같은지 확인한다 (캐시 재사용이면 최초 좌표, 재계산이면 새 좌표)."""
     assert world.coord._cached_area_lat == pytest.approx(위도)
+
+
+@keyword("현재시각을_고정한다", library=LIB)
+def freeze_clock(world, 시, 분):
+    """시계를 한국 시각 2026-04-11 시:분으로 고정한다 (시나리오가 끝나면 풀린다)."""
+    freezer = freeze_time(datetime(2026, 4, 11, 시, 분, tzinfo=KST).astimezone(timezone.utc))
+    freezer.start()
+    world.setdefault("cleanups", []).append(freezer.stop)
+
+
+@keyword("오늘_요약을_기록해_둔다", library=LIB)
+def remember_summary(world, 오전, 오후):
+    """오늘 오전·오후 요약 날씨(wf_am_today / wf_pm_today)를 지정한 값으로 기록해 둔다."""
+    world.coord._wf_am_today, world.coord._wf_pm_today = 오전, 오후
+
+
+@keyword("오늘_요약을_확인한다", library=LIB)
+def assert_summary(world, 오전, 오후):
+    """기록된 오늘 오전·오후 요약이 기대와 같은지 확인한다. null 은 비어 있음(None)이다."""
+    assert (world.coord._wf_am_today, world.coord._wf_pm_today) == (오전, 오후)

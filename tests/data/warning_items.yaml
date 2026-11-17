@@ -1,6 +1,7 @@
 # _get_warning: API 가 돌려준 특보 항목(items) → 센서에 표시되는 특보 문자열
 # 기법: 동등분할(EP) — command/cancel/endTime/warnStress 종류별 대표 항목,
 #       경계값분석(BVA) — 같은 종류의 특보가 여러 번 발표됐을 때 발표 시각(tmFc)이 최신인 것이 기준
+# 가이드(기상특보 조회서비스 활용가이드 getPwnCd): warnStress 0-주의보, 1-경보, 2-중대경보 — 특보 종류와 무관한 공통 값
 # 항목 필드: command(1 발표·3 연장·6 정정·7 변경발표 = 유효, 2 해제·8 변경해제 = 제외) / cancel(0 이어야 유효) /
 #           endTime(0 이어야 유효, 종료 시각이 있으면 이미 끝난 특보) / warnVar(특보 종류) / warnStress(0 주의보·1 경보·2 중대경보) / tmFc(발표 시각)
 - id: WI01
@@ -43,6 +44,14 @@
   분류: 폭염 중대경보(warnStress=2)
   항목: [{command: "1", cancel: "0", endTime: "0", warnVar: "12", warnStress: "2"}]
   기대: 폭염중대경보
+- id: WI21
+  분류: 중대경보(warnStress=2)인데 중대경보 이름이 없는 종류(대설)는 경보로 표시 — 주의보로 낮춰 보이면 안 됨
+  항목: [{command: "1", cancel: "0", endTime: "0", warnVar: "8", warnStress: "2"}]
+  기대: 대설경보
+- id: WI22
+  분류: 중대경보 수준의 열대야(이름이 2개뿐인 종류)도 경보로 표시
+  항목: [{command: "1", cancel: "0", endTime: "0", warnVar: "13", warnStress: "2"}]
+  기대: 열대야경보
 - id: WI11
   분류: 열대야주의보(warnVar=13) — 매핑 누락으로 무시되던 사례(제주시동부)
   항목: [{command: "1", cancel: "0", endTime: 0, tmFc: 202607091620, warnVar: 13, warnStress: 0}]

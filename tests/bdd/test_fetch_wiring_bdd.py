@@ -23,7 +23,7 @@ def device_in_jungnang(world, lat, lon):
     coord = make_coordinator(location_entity="zone.home", location=(lat, lon))
     coord._cached_data = {"weather": {}, "air": {}}
 
-    async def fake_fetch_data(lat, lon, nx, ny, reg_id_temp, reg_id_land, warn_area_code, **_):
+    async def fake_fetch_data(reg_id_temp, reg_id_land, warn_area_code, **_):
         world.calls.update(temp=reg_id_temp, land=reg_id_land, warn=warn_area_code)
         return None
 
