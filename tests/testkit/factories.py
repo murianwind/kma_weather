@@ -121,3 +121,44 @@ class FakeTimer:
         if self._patcher:
             self._patcher.stop()
             self._patcher = None
+
+
+class ScriptedResponse:
+    """aiohttp 응답 흉내: status 와 본문, 비동기 컨텍스트 매니저."""
+
+    def __init__(self, text="{}", status=200):
+        self.status, self._text = status, text
+
+    def raise_for_status(self):
+        pass
+
+    async def text(self):
+        return self._text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def scripted_session(outcomes):
+    """호출 순서대로 정해 둔 결과를 내놓는 가짜 aiohttp 세션.
+
+    outcomes 항목: 예외 인스턴스 → session.get 진입 시 raise / str → 200 본문 / int → 그 HTTP 상태 코드 응답
+    반환: (session, calls)  — calls["n"] 은 session.get 호출 횟수
+    """
+    calls, queue = {"n": 0}, list(outcomes)
+
+    def get(*_args, **_kwargs):
+        calls["n"] += 1
+        outcome = queue.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        if isinstance(outcome, int):
+            return ScriptedResponse(status=outcome)
+        return ScriptedResponse(outcome)
+
+    session = MagicMock()
+    session.get = get
+    return session, calls
