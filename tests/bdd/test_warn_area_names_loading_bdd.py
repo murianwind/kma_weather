@@ -14,7 +14,9 @@ scenarios("features/warn_area_names_loading.feature")
 
 @pytest.fixture
 def world(monkeypatch):
-    monkeypatch.setattr(api_module, "_WARN_AREA_NAMES", {})  # 아직 읽지 않은 상태 (테스트가 끝나면 원래대로)
+    # 아직 읽지 않은 상태 (테스트가 끝나면 원래대로)
+    monkeypatch.setattr(api_module, "_WARN_AREA_NAMES", {})
+    monkeypatch.setattr(api_module, "_WARN_AREA_ANCESTORS", {})
     return World(executor_calls=0)
 
 
@@ -38,6 +40,16 @@ def api_without_hass(world):
 @when(parsers.parse('특보구역 "{code}" 의 지역 이름을 조회한다'))
 def query_name(world, code):
     world.name = run(world.api._get_warn_area_display_name(code))
+
+
+@when(parsers.parse('특보구역 "{code}" 의 상위 지역을 조회한다'))
+def query_ancestors(world, code):
+    world.ancestors = run(world.api._get_warn_area_ancestors(code))
+
+
+@then("상위 지역 목록은 비어 있지 않다")
+def ancestors_found(world):
+    assert world.ancestors
 
 
 @then(parsers.parse('지역 이름은 "{name}" 이다'))
